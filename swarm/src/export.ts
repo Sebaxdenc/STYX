@@ -1,4 +1,5 @@
-import {writeFileSync} from 'node:fs';
+import {mkdirSync, writeFileSync} from 'node:fs';
+import {dirname} from 'node:path';
 import {createPublicClient, http, keccak256, type Address, type PublicClient} from 'viem';
 
 import {heartbeatAbi} from './abi.js';
@@ -85,6 +86,9 @@ export async function exportDataset(options: ExportOptions): Promise<void> {
   }
 
   rows.sort((a, b) => (a.wallet === b.wallet ? a.round - b.round : a.wallet < b.wallet ? -1 : 1));
+  // `detector/data/` is gitignored, so on a fresh clone it does not exist and the
+  // write fails with ENOENT after all the chain reading is already done.
+  mkdirSync(dirname(options.out), {recursive: true});
   writeFileSync(options.out, JSON.stringify({heartbeats: rows}, null, 2));
 
   const withFunder = rows.filter((r) => r.funder !== '').length;

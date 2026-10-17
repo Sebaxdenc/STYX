@@ -132,7 +132,17 @@ contract ParamsTest is Test {
         uint256 total = p.enrollmentWindowSeconds + p.qualificationWindowSeconds + roundSeconds
             + p.disputeWindowSeconds;
 
-        assertLe(total, 120, "el ciclo completo debe caber en dos minutos");
+        // 150 y no 120. El limite real no lo pone el guion, lo pone la
+        // confirmacion en la wallet: cada ventana interactiva tiene que dar
+        // tiempo a ver el aviso, pulsar y confirmar en MetaMask. Medido en
+        // ensayo, 6 s por reto y 12 s para reclamar NO alcanzan, y la
+        // transaccion revierte. Subir esas dos ventanas a 10 s y 30 s lleva el
+        // ciclo a unos 135 s.
+        //
+        // Cabe en un pitch de 3 minutos si se lanza el orquestador ANTES de
+        // empezar a hablar: el enrolamiento y parte de la cualificacion corren
+        // mientras se explica el problema.
+        assertLe(total, 150, "el ciclo completo debe caber en el pitch");
         assertGe(
             p.enrollmentWindowSeconds, 15, "hace falta tiempo para que el publico escanee el QR"
         );

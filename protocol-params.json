@@ -14,21 +14,21 @@
   },
 
   "enrollment": {
-    "_comment": "DEMO: 25 s para que el equipo y el publico que escanee el QR entren en vivo. PRODUCCION: 172800 (48 h). La ventana es amplia a proposito para que no se forme carrera; en la demo se comprime, no se elimina.",
-    "windowSeconds": 25,
+    "_comment": "DEMO: 30 s para que el equipo y el publico que escanee el QR entren en vivo. PRODUCCION: 172800 (48 h). La ventana es amplia a proposito para que no se forme carrera; en la demo se comprime, no se elimina.",
+    "windowSeconds": 30,
     "bondWei": "10000000000000000",
     "_bondWeiComment": "0,01 MON. Pequeno para que el publico pueda entrar con fondos del faucet. PRODUCCION: del orden de 20 USD en MON.",
     "abandonmentForfeitBps": 2500
   },
 
   "qualification": {
-    "_comment": "DEMO: 45 s con 5 retos. PRODUCCION: 300 s con 10 retos. Lo que importa estadisticamente es el numero de muestras, pero con 5 rondas las rutas de senal exacta (multi_signal) siguen funcionando igual, porque no dependen de la temporizacion.",
-    "windowSeconds": 45,
-    "windowBlocks": 150,
-    "challengeCount": 5,
-    "meanChallengeIntervalBlocks": 30,
-    "responseWindowBlocks": 20,
-    "_responseWindowComment": "20 bloques = 6 s. No menos: un popup de wallet tarda entre 2 y 5 s, y una ventana estrecha censuraria a los humanos mas lentos, que es justo la senal que se quiere medir. PRODUCCION: 33 bloques (10 s).",
+    "_comment": "DEMO: 60 s con 4 retos. PRODUCCION: 300 s con 10 retos. Lo que importa estadisticamente es el numero de muestras, pero con 5 rondas las rutas de senal exacta (multi_signal) siguen funcionando igual, porque no dependen de la temporizacion.",
+    "windowSeconds": 60,
+    "windowBlocks": 200,
+    "challengeCount": 4,
+    "meanChallengeIntervalBlocks": 50,
+    "responseWindowBlocks": 33,
+    "_responseWindowComment": "33 bloques = 10 s. MEDIDO EN ENSAYO: con 20 bloques (6 s) no se llega, porque esos segundos incluyen ver el aviso, pulsar y confirmar en MetaMask. Esa confirmacion humana es el suelo real de todas las ventanas interactivas.",
     "minResponsesToQualify": 3,
     "interactionMode": "tap",
     "_interactionModeComment": "Un toque, no un puzzle. La interaccion humana es obligatoria: el modo automatico destruye la senal de varianza. Ver ARCHITECTURE.md seccion 7.",
@@ -44,16 +44,16 @@
   },
 
   "lottery": {
-    "participationCap": 4,
-    "_participationCapComment": "min(participationScore, cap). Con 5 retos permite fallar 1 sin perder peso maximo. PRODUCCION: 8 de 10.",
-    "roundLengthBlocks": 40,
-    "_roundLengthBlocksComment": "40 bloques = 12 s para reclamar. Reclamar es recoger, no competir: llegar tarde dentro de la ronda no penaliza. PRODUCCION: 200.",
+    "participationCap": 3,
+    "_participationCapComment": "min(participationScore, cap). Con 4 retos permite fallar 1 sin perder peso maximo. PRODUCCION: 8 de 10.",
+    "roundLengthBlocks": 100,
+    "_roundLengthBlocksComment": "100 bloques = 30 s para reclamar. MEDIDO EN ENSAYO: con 40 bloques (12 s) un humano no llega a ver el resultado, pulsar y confirmar, y la transaccion revierte con NoRoundOpen. Reclamar es recoger, no competir, pero hay que darle tiempo a recoger.",
     "immutableOnceOpen": true
   },
 
   "dispute": {
     "_comment": "DEMO: 20 s, para que la revocacion del enjambre se vea en el escenario. PRODUCCION: 172800 (48 h). La entrada es provisional mientras esta ventana esta abierta, y eso es lo que hace ejecutable la revocacion.",
-    "windowSeconds": 20,
+    "windowSeconds": 15,
     "challengerBondWei": "10000000000000000",
     "transfersLockedDuringWindow": true,
     "revocationRefundsFullPrice": true

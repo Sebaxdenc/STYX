@@ -185,6 +185,13 @@ export const lotteryAdminAbi = [
     outputs: [{type: 'uint256'}],
     stateMutability: 'view',
   },
+  {
+    type: 'function',
+    name: 'roundLengthBlocks',
+    inputs: [],
+    outputs: [{type: 'uint256'}],
+    stateMutability: 'view',
+  },
 ] as const;
 
 export const clusterAbi = [
