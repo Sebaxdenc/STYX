@@ -30,7 +30,7 @@ cat > ../deployment.json <<'JSON'
 }
 JSON
 
-export SWARM_FUNDER_MNEMONIC="..."    # wallet con MON de testnet
+export SWARM_FUNDER_PRIVATE_KEY="0x..." # wallet con MON de testnet
 export PK="0x..."                     # deployer, para orquestar
 
 # Antes del pitch
@@ -122,8 +122,14 @@ escanear a posteriori.
 
 | Variable | Obligatoria | Para qué |
 |---|---|---|
-| `SWARM_FUNDER_MNEMONIC` | sí, para `attack` | Wallet que fondea el enjambre |
+| `SWARM_FUNDER_PRIVATE_KEY` | una de las dos | Wallet que fondea el enjambre. La de MetaMask, 64 hex |
+| `SWARM_FUNDER_MNEMONIC` | una de las dos | Alternativa: frase de 12 o 24 palabras |
+| `PK` | sí, para `demo` | Deployer, para orquestar las fases |
 | `MONAD_RPC` | no | Sobreescribe el RPC de `protocol-params.json` |
+
+Se acepta clave privada porque es lo que da MetaMask: pedir una frase semilla
+cuando el usuario ya tiene una clave invita a pegar la frase de una wallet real
+en una terminal.
 
 Las wallets del enjambre se derivan de una mnemónica de prueba pública y fija, de
 modo que la demo es reproducible. **No pongas fondos reales en ellas.**
