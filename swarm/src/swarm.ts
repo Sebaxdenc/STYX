@@ -144,6 +144,10 @@ async function fund(
   options: SwarmOptions,
 ): Promise<void> {
   log('fondeando...');
+  const gasPrice = maxBigInt(SWARM_GAS_PRICE, await publicClient.getGasPrice());
+  if (gasPrice !== SWARM_GAS_PRICE) {
+    log(`gas del prefondeo ajustado a ${gasPrice / 1_000_000_000n} gwei`);
+  }
   for (const [index, bot] of bots.entries()) {
     const balance = await publicClient.getBalance({address: bot.address});
     if (balance >= options.fundWei) continue;
@@ -159,13 +163,17 @@ async function fund(
       // when a plain native transfer is valid. Native transfers have a fixed
       // gas cost, so bypass estimation and submit the measured limit directly.
       gas: NATIVE_TRANSFER_GAS,
-      gasPrice: SWARM_GAS_PRICE,
+      gasPrice,
       chain: null,
       account: funderClient.account ?? null,
     });
     await publicClient.waitForTransactionReceipt({hash});
   }
   log('fondeo completo');
+}
+
+function maxBigInt(left: bigint, right: bigint): bigint {
+  return left > right ? left : right;
 }
 
 // ------------------------------------------------------------------ enrolment
