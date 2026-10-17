@@ -1,0 +1,34 @@
+{
+  "name": "styx-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Interfaz de demo y visualizacion del enjambre de STYX",
+  "scripts": {
+    "sync-deployment": "node scripts/sync-deployment.mjs",
+    "predev": "npm run sync-deployment",
+    "dev": "next dev",
+    "prebuild": "npm run sync-deployment",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "16.2.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "viem": "2.57.7"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "3.2.0",
+    "@tailwindcss/postcss": "4.1.13",
+    "@types/node": "22.10.5",
+    "@types/react": "19.1.0",
+    "@types/react-dom": "19.1.0",
+    "eslint": "9.18.0",
+    "eslint-config-next": "16.2.0",
+    "postcss": "8.5.1",
+    "tailwindcss": "4.1.13",
+    "typescript": "5.9.3"
+  }
+}
