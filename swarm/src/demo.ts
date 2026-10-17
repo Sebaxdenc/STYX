@@ -258,17 +258,24 @@ export async function preflight(options: DemoOptions): Promise<number> {
 
   // Prefunding is the step that is easiest to forget and the one that breaks the
   // demo silently, because enrolment closes before forty sequential transfers
-  // can land.
-  let funded = 0;
-  for (let i = 1; i <= options.size; i++) {
-    const bot = mnemonicToAccount(SWARM_MNEMONIC, {addressIndex: i});
-    const balance = await publicClient.getBalance({address: bot.address});
-    if (balance > 50_000_000_000_000_000n) funded += 1;
-  }
-  if (funded < options.size) {
-    bad(`solo ${funded}/${options.size} wallets prefondeadas. Ejecuta: prefund --size ${options.size}`);
+  // can land. Irrelevant when the swarm is not taking part.
+  if (options.skipSwarm) {
+    ok('enjambre desactivado (--no-swarm), no se comprueba el prefondeo');
   } else {
-    ok(`${funded} wallets del enjambre prefondeadas`);
+    let funded = 0;
+    for (let i = 1; i <= options.size; i++) {
+      const bot = mnemonicToAccount(SWARM_MNEMONIC, {addressIndex: i});
+      const balance = await publicClient.getBalance({address: bot.address});
+      if (balance > 50_000_000_000_000_000n) funded += 1;
+    }
+    if (funded < options.size) {
+      bad(
+        `solo ${funded}/${options.size} wallets prefondeadas. ` +
+          `Ejecuta: prefund --size ${options.size}`,
+      );
+    } else {
+      ok(`${funded} wallets del enjambre prefondeadas`);
+    }
   }
 
   if (!existsSync(detectorPython)) {
