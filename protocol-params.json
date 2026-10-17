@@ -22,13 +22,13 @@
   },
 
   "qualification": {
-    "_comment": "DEMO: 60 s con 4 retos. PRODUCCION: 300 s con 10 retos. Lo que importa estadisticamente es el numero de muestras, pero con 5 rondas las rutas de senal exacta (multi_signal) siguen funcionando igual, porque no dependen de la temporizacion.",
-    "windowSeconds": 60,
-    "windowBlocks": 200,
+    "_comment": "DEMO: 84 s con 4 retos. PRODUCCION: 300 s con 10 retos. Lo que importa estadisticamente es el numero de muestras, pero con 5 rondas las rutas de senal exacta (multi_signal) siguen funcionando igual, porque no dependen de la temporizacion.",
+    "windowSeconds": 84,
+    "windowBlocks": 280,
     "challengeCount": 4,
-    "meanChallengeIntervalBlocks": 50,
-    "responseWindowBlocks": 33,
-    "_responseWindowComment": "33 bloques = 10 s. MEDIDO EN ENSAYO: con 20 bloques (6 s) no se llega, porque esos segundos incluyen ver el aviso, pulsar y confirmar en MetaMask. Esa confirmacion humana es el suelo real de todas las ventanas interactivas.",
+    "meanChallengeIntervalBlocks": 70,
+    "responseWindowBlocks": 50,
+    "_responseWindowComment": "50 bloques = 15 s. MEDIDO EN ENSAYO: con 20 bloques (6 s) no se llega, porque esos segundos incluyen ver el aviso, pulsar y confirmar en MetaMask. Esa confirmacion humana es el suelo real de todas las ventanas interactivas.",
     "minResponsesToQualify": 3,
     "interactionMode": "tap",
     "_interactionModeComment": "Un toque, no un puzzle. La interaccion humana es obligatoria: el modo automatico destruye la senal de varianza. Ver ARCHITECTURE.md seccion 7.",
@@ -53,7 +53,7 @@
 
   "dispute": {
     "_comment": "DEMO: 20 s, para que la revocacion del enjambre se vea en el escenario. PRODUCCION: 172800 (48 h). La entrada es provisional mientras esta ventana esta abierta, y eso es lo que hace ejecutable la revocacion.",
-    "windowSeconds": 15,
+    "windowSeconds": 10,
     "challengerBondWei": "10000000000000000",
     "transfersLockedDuringWindow": true,
     "revocationRefundsFullPrice": true

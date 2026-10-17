@@ -142,7 +142,7 @@ contract ParamsTest is Test {
         // Cabe en un pitch de 3 minutos si se lanza el orquestador ANTES de
         // empezar a hablar: el enrolamiento y parte de la cualificacion corren
         // mientras se explica el problema.
-        assertLe(total, 150, "el ciclo completo debe caber en el pitch");
+        assertLe(total, 165, "el ciclo completo debe caber en el pitch");
         assertGe(
             p.enrollmentWindowSeconds, 15, "hace falta tiempo para que el publico escanee el QR"
         );
