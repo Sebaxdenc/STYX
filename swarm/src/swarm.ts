@@ -155,6 +155,7 @@ async function fund(
     const value = options.careful
       ? options.fundWei + BigInt(index) * parseEther('0.0001')
       : options.fundWei;
+    const expectedBalance = balance + value;
 
     const hash = await funderClient.sendTransaction({
       to: bot.address,
@@ -167,7 +168,17 @@ async function fund(
       chain: null,
       account: funderClient.account ?? null,
     });
-    await publicClient.waitForTransactionReceipt({hash});
+    const receipt = await publicClient.waitForTransactionReceipt({hash});
+    if (receipt.status !== 'success') {
+      throw new Error(`el fondeo de ${bot.address} fue revertido (${hash})`);
+    }
+    const credited = await publicClient.getBalance({address: bot.address});
+    if (credited < expectedBalance) {
+      throw new Error(
+        `el fondeo de ${bot.address} no acredito ${value} wei (${hash}); ` +
+          `saldo observado: ${credited} wei`,
+      );
+    }
   }
   log('fondeo completo');
 }
