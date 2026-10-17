@@ -37,6 +37,7 @@ STYX swarm: orquestador de la demo, simulador de adversario y exportador.
 
 Entorno:
   SWARM_FUNDER_MNEMONIC   obligatorio para attack
+  SWARM_BOT_MNEMONIC      obligatorio: mnemónica nueva para las wallets del enjambre
   MONAD_RPC               opcional, sobreescribe el RPC de protocol-params.json
 
 Las direcciones de los contratos se leen de deployment.json en la raiz del repo.

@@ -16,6 +16,7 @@ import {
   loadDeployment,
   loadFunderAccount,
   loadParams,
+  loadSwarmMnemonic,
   monadTestnet,
   subWindowBlocks,
   type Deployment,
@@ -48,9 +49,6 @@ export interface SwarmOptions {
   readonly fundWei: bigint;
   readonly deploymentPath?: string;
 }
-
-const SWARM_MNEMONIC =
-  'test test test test test test test test test test test junk';
 
 /** Shared gas settings. One script, one configuration, one fingerprint. */
 const SWARM_GAS_PRICE = 55_000_000_000n;
@@ -87,10 +85,12 @@ export async function prefundSwarm(options: SwarmOptions): Promise<void> {
   const publicClient = createPublicClient({chain, transport: http()}) as PublicClient;
   const funder = loadFunderAccount();
   const funderClient = createWalletClient({account: funder, chain, transport: http()});
+  const mnemonic = loadSwarmMnemonic();
 
   const bots = Array.from({length: options.size}, (_, i) =>
-    mnemonicToAccount(SWARM_MNEMONIC, {addressIndex: i + 1}),
+    mnemonicToAccount(mnemonic, {addressIndex: i + 1}),
   );
+  await rejectDelegatedBots(publicClient, bots);
 
   log(`prefondeo de ${bots.length} wallets desde ${funder.address}`);
   await fund(funderClient, publicClient, bots, options);
@@ -108,10 +108,12 @@ export async function runSwarm(options: SwarmOptions): Promise<void> {
   const publicClient = createPublicClient({chain, transport: http()}) as PublicClient;
   const funder = loadFunderAccount();
   const funderClient = createWalletClient({account: funder, chain, transport: http()});
+  const mnemonic = loadSwarmMnemonic();
 
   const bots = Array.from({length: options.size}, (_, i) =>
-    mnemonicToAccount(SWARM_MNEMONIC, {addressIndex: i + 1}),
+    mnemonicToAccount(mnemonic, {addressIndex: i + 1}),
   );
+  await rejectDelegatedBots(publicClient, bots);
 
   log(`enjambre de ${bots.length} wallets`);
   log(`financiador ${funder.address}`);
@@ -185,6 +187,21 @@ async function fund(
 
 function maxBigInt(left: bigint, right: bigint): bigint {
   return left > right ? left : right;
+}
+
+async function rejectDelegatedBots(
+  publicClient: PublicClient,
+  bots: readonly HDAccount[],
+): Promise<void> {
+  for (const bot of bots) {
+    const code = await publicClient.getCode({address: bot.address});
+    if (code?.startsWith('0xef0100')) {
+      throw new Error(
+        `la wallet del enjambre ${bot.address} esta delegada con EIP-7702. ` +
+          'Usa una mnemónica nueva en SWARM_BOT_MNEMONIC.',
+      );
+    }
+  }
 }
 
 // ------------------------------------------------------------------ enrolment

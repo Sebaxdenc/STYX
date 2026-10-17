@@ -78,6 +78,22 @@ export function requireEnv(name: string): string {
   return value;
 }
 
+/** Mnemonic used to derive the demo wallets. It must not be a public fixture. */
+export function loadSwarmMnemonic(): string {
+  const mnemonic = process.env.SWARM_BOT_MNEMONIC?.trim();
+  if (mnemonic === undefined || mnemonic === '') {
+    throw new Error(
+      'falta SWARM_BOT_MNEMONIC. Genera una mnemónica nueva con `cast wallet new` ' +
+        'y exportala antes de ejecutar la demo.',
+    );
+  }
+  const words = mnemonic.split(/\s+/);
+  if (words.length !== 12 && words.length !== 24) {
+    throw new Error('SWARM_BOT_MNEMONIC debe tener 12 o 24 palabras.');
+  }
+  return mnemonic;
+}
+
 /**
  * Funder account, from either a private key or a mnemonic.
  *

@@ -23,6 +23,7 @@ import {
 import {
   loadDeployment,
   loadParams,
+  loadSwarmMnemonic,
   monadTestnet,
   requireEnv,
   type Deployment,
@@ -38,8 +39,6 @@ const datasetPath = join(detectorDir, 'data', 'heartbeats.json');
 const reportPath = join(detectorDir, 'data', 'report.json');
 
 /** Same mnemonic the swarm derives from, so the summary can tell bots apart. */
-const SWARM_MNEMONIC = 'test test test test test test test test test test test junk';
-
 export interface DemoOptions {
   readonly size: number;
   readonly jitterBlocks: number;
@@ -66,6 +65,7 @@ export async function runDemo(options: DemoOptions): Promise<void> {
   const chain = monadTestnet(params);
   const deployment = loadDeployment();
   const publicClient = createPublicClient({chain, transport: http()}) as PublicClient;
+  const swarmMnemonic = loadSwarmMnemonic();
   const admin = privateKeyToAccount(requireEnv('PK') as Hex);
   const wallet = createWalletClient({account: admin, chain, transport: http()});
 
@@ -232,6 +232,7 @@ export async function preflight(options: DemoOptions): Promise<number> {
   const params = loadParams();
   const chain = monadTestnet(params);
   const publicClient = createPublicClient({chain, transport: http()}) as PublicClient;
+  const swarmMnemonic = loadSwarmMnemonic();
 
   process.stdout.write('comprobacion previa\n');
 
@@ -275,7 +276,7 @@ export async function preflight(options: DemoOptions): Promise<number> {
   } else {
     let funded = 0;
     for (let i = 1; i <= options.size; i++) {
-      const bot = mnemonicToAccount(SWARM_MNEMONIC, {addressIndex: i});
+      const bot = mnemonicToAccount(swarmMnemonic, {addressIndex: i});
       const balance = await publicClient.getBalance({address: bot.address});
       if (balance > 50_000_000_000_000_000n) funded += 1;
     }
@@ -340,7 +341,7 @@ async function summary(
   let botsWithTickets = 0;
   let botsRevoked = 0;
   for (let i = 1; i <= options.size; i++) {
-    const bot = mnemonicToAccount(SWARM_MNEMONIC, {addressIndex: i});
+    const bot = mnemonicToAccount(loadSwarmMnemonic(), {addressIndex: i});
     const state = await client.readContract({
       address: deployment.ticketRegistry,
       abi: ticketAdminAbi,

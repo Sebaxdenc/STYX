@@ -32,6 +32,7 @@ JSON
 
 export SWARM_FUNDER_PRIVATE_KEY="0x..." # wallet con MON de testnet
 export PK="0x..."                     # deployer, para orquestar
+export SWARM_BOT_MNEMONIC="..."       # mnemónica nueva, solo para esta demo
 
 # Antes del pitch
 npm run swarm -- prefund --size 40
@@ -124,6 +125,7 @@ escanear a posteriori.
 |---|---|---|
 | `SWARM_FUNDER_PRIVATE_KEY` | una de las dos | Wallet que fondea el enjambre. La de MetaMask, 64 hex |
 | `SWARM_FUNDER_MNEMONIC` | una de las dos | Alternativa: frase de 12 o 24 palabras |
+| `SWARM_BOT_MNEMONIC` | sí | Mnemónica nueva para derivar las wallets del enjambre |
 | `PK` | sí, para `demo` | Deployer, para orquestar las fases |
 | `MONAD_RPC` | no | Sobreescribe el RPC de `protocol-params.json` |
 
@@ -131,5 +133,7 @@ Se acepta clave privada porque es lo que da MetaMask: pedir una frase semilla
 cuando el usuario ya tiene una clave invita a pegar la frase de una wallet real
 en una terminal.
 
-Las wallets del enjambre se derivan de una mnemónica de prueba pública y fija, de
-modo que la demo es reproducible. **No pongas fondos reales en ellas.**
+Las wallets del enjambre se derivan de `SWARM_BOT_MNEMONIC`, que debe ser una
+mnemónica nueva y privada para cada entorno de demo. Esto evita reutilizar
+direcciones que puedan estar delegadas mediante EIP-7702. **No pongas fondos
+reales en ellas.**
