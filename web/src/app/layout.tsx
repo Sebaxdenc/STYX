@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { AppHeader } from "@/components/app-header";
+import { FlowNav } from "@/components/flow-nav";
 import { WalletProvider } from "@/hooks/use-wallet";
 import "./globals.css";
 
@@ -49,6 +50,11 @@ export default function RootLayout({
           <AppHeader />
           <main id="contenido" className="mx-auto w-full max-w-5xl px-6 py-12 md:py-16">
             {children}
+            {/*
+              Rendered here rather than inside each screen so that no screen can
+              end without telling the user what follows.
+            */}
+            <FlowNav />
           </main>
         </WalletProvider>
       </body>
