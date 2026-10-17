@@ -39,17 +39,25 @@ export interface EnrollmentState {
   readonly closesAt: bigint;
   readonly enrolledCount: bigint;
   readonly bondAmount: bigint;
+  /**
+   * Fixed when enrolment closes; zero before that.
+   *
+   * Read here rather than from `HeartbeatRegistry` because the registry only
+   * caches it when qualification opens, which is later. See `cohort.ts`.
+   */
+  readonly cohortSeed: `0x${string}`;
 }
 
 export async function readEnrollmentState(client: PublicClient): Promise<EnrollmentState> {
   const { enrollment } = requireAddresses();
   const base = { address: enrollment, abi: enrollmentAbi } as const;
 
-  const [phase, closesAt, enrolledCount, bondAmount] = await Promise.all([
+  const [phase, closesAt, enrolledCount, bondAmount, cohortSeed] = await Promise.all([
     client.readContract({ ...base, functionName: "phase" }),
     client.readContract({ ...base, functionName: "closesAt" }),
     client.readContract({ ...base, functionName: "enrolledCount" }),
     client.readContract({ ...base, functionName: "bondAmount" }),
+    client.readContract({ ...base, functionName: "cohortSeed" }),
   ]);
 
   return {
@@ -57,6 +65,7 @@ export async function readEnrollmentState(client: PublicClient): Promise<Enrollm
     closesAt,
     enrolledCount,
     bondAmount,
+    cohortSeed,
   };
 }
 

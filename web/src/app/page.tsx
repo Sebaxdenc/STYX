@@ -1,7 +1,5 @@
+import { EnrollmentScreen } from "@/components/screens/enrollment-screen";
+
 export default function Home() {
-  return (
-    <main>
-      <h1>STYX</h1>
-    </main>
-  );
+  return <EnrollmentScreen />;
 }

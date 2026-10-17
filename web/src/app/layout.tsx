@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import { AppHeader } from "@/components/app-header";
+import { WalletProvider } from "@/hooks/use-wallet";
 import "./globals.css";
 
 /*
@@ -24,15 +26,7 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "STYX — Reparto justo de entradas, verificable en la cadena",
   description:
-    "STYX sustituye la cola por orden de llegada por una ventana de cualificacion y un sorteo verificable, e identifica enjambres coordinados analizando datos que la cadena registra de forma nativa.",
-  metadataBase: new URL("https://styx.invalid"),
-  openGraph: {
-    title: "STYX — Reparto justo de entradas",
-    description:
-      "La velocidad no aporta ninguna ventaja, por construccion. Construido sobre Monad.",
-    locale: "es_ES",
-    type: "website",
-  },
+    "La cualificación ocurre en una ventana amplia y las entradas se asignan por sorteo verificable. La velocidad no confiere ninguna ventaja, por construcción.",
 };
 
 export default function RootLayout({
@@ -51,7 +45,12 @@ export default function RootLayout({
         >
           Saltar al contenido
         </a>
-        {children}
+        <WalletProvider>
+          <AppHeader />
+          <main id="contenido" className="mx-auto w-full max-w-5xl px-6 py-12 md:py-16">
+            {children}
+          </main>
+        </WalletProvider>
       </body>
     </html>
   );
