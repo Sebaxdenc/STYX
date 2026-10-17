@@ -148,37 +148,46 @@ async function scanFunding(
 ): Promise<Map<string, string>> {
   const wanted = new Set([...participants].map((a) => a.toLowerCase()));
   const funders = new Map<string, string>();
-  const latest = await client.getBlockNumber();
 
-  // Funding happens before enrolment, so look a little further back. Kept modest
-  // on purpose: each block is one `getBlock` with full transactions, and the
-  // public RPC allows only 15 to 25 requests per second.
-  const start = fromBlock > 300n ? fromBlock - 300n : 0n;
-  log(`buscando linaje de fondeo en los bloques ${start}..${latest}`);
+  // Funding happens before enrolment, so scan back from the demo start block.
+  const start = fromBlock > 2_000n ? fromBlock - 2_000n : 0n;
+  log(`buscando linaje de fondeo en los bloques ${start}..${fromBlock - 1n}`);
 
-  // Small batches rather than one request at a time, and well under the batch
-  // limit of the public endpoints.
-  const BATCH = 8;
-  for (let n = start; n <= latest; n += BigInt(BATCH)) {
-    const numbers: bigint[] = [];
-    for (let k = 0; k < BATCH && n + BigInt(k) <= latest; k++) numbers.push(n + BigInt(k));
-
-    const blocks = await Promise.all(
-      numbers.map((blockNumber) => client.getBlock({blockNumber, includeTransactions: true})),
-    );
-
-    for (const block of blocks) {
-      for (const tx of block.transactions) {
-        if (typeof tx === 'string') continue;
-        if (tx.to === null || tx.value === 0n) continue;
-        const to = tx.to.toLowerCase();
-        if (!wanted.has(to) || funders.has(to)) continue;
-        funders.set(to, tx.from.toLowerCase());
-      }
+  // Scan backwards because pre-funding happened before the demo's start block.
+  // Keep one request in flight: Alchemy Free rate-limits getBlockByNumber
+  // aggressively, and finding all participants lets us stop early.
+  for (let blockNumber = fromBlock - 1n; blockNumber >= start; blockNumber -= 1n) {
+    const block = await getBlockWithRetry(client, blockNumber);
+    for (const tx of block.transactions) {
+      if (typeof tx === 'string') continue;
+      if (tx.to === null || tx.value === 0n) continue;
+      const to = tx.to.toLowerCase();
+      if (!wanted.has(to) || funders.has(to)) continue;
+      funders.set(to, tx.from.toLowerCase());
     }
+    if (funders.size === wanted.size) break;
   }
 
   return funders;
+}
+
+async function getBlockWithRetry(
+  client: PublicClient,
+  blockNumber: bigint,
+): Promise<Awaited<ReturnType<PublicClient['getBlock']>>> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      return await client.getBlock({blockNumber, includeTransactions: true});
+    } catch (error) {
+      if (!isRateLimitError(error) || attempt === 4) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt));
+    }
+  }
+  throw new Error(`no se pudo leer el bloque ${blockNumber}`);
+}
+
+function isRateLimitError(error: unknown): boolean {
+  return error instanceof Error && /429|too many requests/i.test(error.message);
 }
 
 function log(message: string): void {
