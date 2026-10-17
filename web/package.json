@@ -4,7 +4,10 @@
   "private": true,
   "description": "Interfaz de demo y visualizacion del enjambre de STYX",
   "scripts": {
+    "sync-deployment": "node scripts/sync-deployment.mjs",
+    "predev": "npm run sync-deployment",
     "dev": "next dev",
+    "prebuild": "npm run sync-deployment",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
