@@ -145,8 +145,19 @@ export async function runDemo(options: DemoOptions): Promise<void> {
   log('semilla fijada desde el hash de un bloque futuro. el sorteo ya esta decidido');
   log('reclamar es recoger, no competir: llegar tarde no quita nada');
 
-  // Let claims land. The swarm resolves once it has collected.
-  await Promise.race([swarm, sleep(20_000)]);
+  // Let claims land. Derived from the round length rather than a fixed sleep:
+  // a human needs to see the result, press the button and confirm in MetaMask,
+  // and if this waits less than the round lasts the demo moves on while someone
+  // is still confirming.
+  const roundMs = Number(
+    await publicClient.readContract({
+      address: deployment.lottery,
+      abi: lotteryAdminAbi,
+      functionName: 'roundLengthBlocks',
+    }),
+  ) * params.network.blockTimeMs;
+  log(`${Math.round(roundMs / 1000)} s para reclamar`);
+  await Promise.race([swarm, sleep(roundMs)]);
 
   const entitlements = await publicClient.readContract({
     address: deployment.lottery,
