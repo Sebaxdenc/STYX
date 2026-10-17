@@ -80,7 +80,10 @@ cd contracts && forge script script/Deploy.s.sol --rpc-url $MONAD_TESTNET_RPC
 cd indexer && npm install && npm run build && npm test
 
 # detector
-cd detector && pip install -r requirements.txt && pytest
+cd detector && python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
+cd detector && ./.venv/bin/python -m pytest
+cd detector && ./.venv/bin/python -m styx_detector simulate --out data/hb.json --jitter 3
+cd detector && ./.venv/bin/python -m styx_detector detect --input data/hb.json
 
 # web
 cd web && npm install && npm run build
@@ -231,6 +234,12 @@ gas, hash de calldata). Ver `requireSignalConjunction` en
 - No uses componentes conexas para agrupar. Con millones de aristas espurias el
   grafo se fusiona por percolación. Usa Louvain o clustering espectral. Ver
   ARCHITECTURE.md sección 3.
+- El detector tiene **cuatro rutas** (`identical`, `cohesive`, `multi_signal`,
+  `correlated`) y cada una cubre un punto ciego medido de las otras. Antes de
+  eliminar o simplificar una, lee `detector/README.md`: la correlación por pares
+  sola no aguanta el jitter, y la varianza cero hace indefinido a Pearson.
+- La matriz de correlación densa es `O(N^2)` en memoria. Respeta
+  `max_dense_wallets`: medido, 10.000 wallets eran 5,8 GB.
 
 ---
 

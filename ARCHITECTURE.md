@@ -374,22 +374,89 @@ Nota técnica: una wallet con varianza cero hace indefinida la correlación de
 Pearson. Esos casos se marcan directamente por el test de varianza, ya que una
 varianza nula a lo largo de diez rondas es por sí misma anómala.
 
-### Robustez frente al jitter
+### Las cuatro rutas de detección
 
-Un adversario que añada jitter aleatorio por wallet reduce la correlación por
-pares. Dos respuestas:
+Esta estructura no es un diseño previo: cada ruta se añadió porque al medir la
+anterior aparecio un punto ciego concreto.
 
-- Si el jitter se genera en infraestructura compartida, la **distribución** sigue
-  siendo común entre wallets aunque las series individuales se descorrelacionen.
-  Un test de Kolmogorov-Smirnov de dos muestras compara distribuciones en lugar
-  de secuencias.
-- La entropía de la población detecta ambos modos de fallo. Una población real
-  sigue una distribución de cola larga. Un enjambre es o demasiado uniforme o
-  uniformemente aleatorio, y la aleatoriedad uniforme es en sí misma anómala
-  porque las poblaciones reales no son uniformes.
+| Ruta | Qué captura | Punto ciego que cubre |
+|---|---|---|
+| `identical` | Latencia constante e idéntica | La varianza cero hace **indefinida** la correlación de Pearson. Sin esta ruta el enjambre más obvio de todos pasa desapercibido |
+| `cohesive` | Grupos con señal exacta compartida cuyas desviaciones comparten un factor latente | La correlación por pares se desmorona con jitter |
+| `multi_signal` | Grupos que comparten tres o más señales exactas | Con jitter alto la temporización deja de servir, pero el lote sigue visible |
+| `correlated` | Grafo de correlación por pares con comunidades Louvain | Enjambres apretados con coincidencia de señales solo parcial |
 
-Añadir jitter también obliga al adversario a alejarse de su tiempo de respuesta
-óptimo.
+### El jitter rompe la correlación por pares, y la cohesión de grupo lo arregla
+
+Este fue el hallazgo al implementar. Si el adversario añade jitter, la
+correlación entre dos de sus wallets cae a
+
+```
+var_compartida / (var_compartida + var_jitter)
+```
+
+que con jitter moderado baja de 0,6 y se escapa de cualquier umbral útil. Bajar
+el umbral no es opción: dispararía los falsos positivos. **La correlación por
+pares sola no aguanta el jitter**, y afirmar lo contrario sería falso.
+
+La solución es dejar de mirar pares y mirar el grupo. Si `n` wallets comparten un
+factor latente, el perfil medio del grupo estima ese factor con el ruido reducido
+en `sqrt(n)`, y la correlación de cada miembro contra el perfil sube a
+
+```
+sqrt(var_compartida / (var_compartida + var_jitter))
+```
+
+Lo decisivo no es ese valor sino la separación frente al caso independiente: un
+grupo de wallets independientes da una cohesión de aproximadamente `1/sqrt(n)`,
+es decir 0,1 para cien miembros. El perfil se construye dejando fuera al propio
+miembro, porque si no correlacionaría con un perfil que lo contiene.
+
+**El orden de las operaciones es deliberado.** Primero se parte la población por
+señales de coincidencia exacta, que es `O(N)`, y solo después se mide la
+cohesión. Eso satisface el invariante 12 por construcción y protege el falso
+positivo que de verdad importa: los usuarios honestos tras un mismo RPC público
+sí comparten factor latente, pero no comparten financiador ni parámetros de gas,
+así que nunca llegan a formar grupo candidato.
+
+### Resultados medidos
+
+Escenario: 75 por ciento honestos independientes, 15 por ciento enjambre, 10 por
+ciento honestos compartiendo RPC, diez rondas.
+
+| Jitter | Recall | Falsos positivos | Ruta | Sospecha |
+|---|---|---|---|---|
+| 0 | 100% | 0 | `cohesive` | 4,62 |
+| 3 | 100% | 0 | `cohesive` | 3,03 |
+| 6 | 100% | 0 | `multi_signal` | 1,93 |
+| 10 | 100% | 0 | `multi_signal` | 1,26 |
+| 20 | 100% | 0 | `multi_signal` | 0,64 |
+
+La sospecha **se degrada a propósito** al mejorar la evasión: el detector reporta
+menos confianza en lugar de fingir certeza.
+
+| Wallets | Latidos | Tiempo | Memoria pico |
+|---|---|---|---|
+| 10.000 | 93.311 | 12 s | 14 MB |
+| 50.000 | 466.078 | 99 s | 78 MB |
+| 100.000 | 932.303 | 293 s | 157 MB |
+
+La ruta `correlated` usa una matriz densa `O(N^2)`: medido, 10.000 wallets
+consumían 5,8 GB y 46 s, y 100.000 habrían necesitado unos 580 GB. Por encima de
+`max_dense_wallets` se omite con un aviso y el trabajo lo hacen `cohesive` y
+`multi_signal`, que son `O(N*R)`. Cinco minutos para cien mil wallets es holgado
+dentro de una ventana de impugnación de 48 horas.
+
+### El límite honesto, verificado por un test
+
+Un adversario que aleatoriza **la temporización y las huellas**, con financiador,
+gas y calldata distintos por wallet, **no es detectable** con datos onchain. Hay
+un test que lo comprueba, `test_careful_adversary_escapes_and_this_is_documented`,
+para que el límite sea explícito y falsable en lugar de una nota al pie.
+
+Esa evasión no es gratuita: exige infraestructura independiente por identidad y
+fondear cada wallet por una ruta distinta. La afirmación del proyecto es que
+cazamos al adversario económicamente racional, no a uno ilimitado.
 
 ### Pipeline
 
@@ -398,7 +465,7 @@ HeartbeatRegistry emite eventos     (wallet, ronda, bloque, posición)
           |
 indexer construye la matriz          una fila por wallet
           |
-detector calcula similitud y agrupa  Louvain o espectral
+detector aplica las cuatro rutas     identical, cohesive, multi_signal, correlated
           |
 ClusterRegistry publica el commit    raíz Merkle + CID del ruleset
           |
@@ -656,10 +723,13 @@ Documentados para que no se reintroduzcan.
 2. La detección de coordinación es probabilística. Los falsos positivos son
    posibles, y por eso los hallazgos modulan el peso y abren una impugnación en
    lugar de excluir.
-3. Un adversario sofisticado que ejecute infraestructura genuinamente
-   independiente por identidad, con aleatoriedad independiente, eleva el listón
-   sustancialmente. Cazamos al adversario económicamente racional, no a uno
-   ilimitado.
+3. Un adversario que aleatoriza la temporización **y** las huellas, con
+   financiador, gas y calldata distintos por wallet, no es detectable con datos
+   onchain. No es una conjetura: hay un test que lo verifica,
+   `test_careful_adversary_escapes_and_this_is_documented` en
+   `detector/tests/test_detection.py`. Cazamos al adversario económicamente
+   racional, no a uno ilimitado. La evasión le cuesta infraestructura
+   independiente por identidad y una ruta de fondeo distinta por wallet.
 4. La detección es una carrera armamentística que requiere operación continua. En
    el caso de CrowdSec el operador empezó a rotar direcciones en cuanto se
    aplicaron los bloqueos.

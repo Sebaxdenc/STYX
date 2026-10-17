@@ -28,6 +28,8 @@ venv/
 *.key
 
 # Datos generados por el detector
+# Los datasets e informes se publican por CID, no se versionan aqui.
+detector/data/
 detector/output/
 detector/.cache/
 
