@@ -7,6 +7,13 @@ Dos herramientas para la demo:
 - **`export`** lee la cadena y escribe el dataset que consume el detector,
   cerrando el ciclo sin necesidad de un indexer completo.
 
+Y un tercero que los coordina:
+
+- **`demo`** ejecuta la demo completa de punta a punta con un solo comando, y
+  **`check`** verifica que todo esté listo antes de subir al escenario.
+
+El runbook completo está en [DEPLOY.md](../DEPLOY.md).
+
 ## Uso
 
 ```
@@ -18,13 +25,22 @@ cat > ../deployment.json <<'JSON'
   "enrollment": "0x...",
   "heartbeatRegistry": "0x...",
   "lottery": "0x...",
-  "ticketRegistry": "0x..."
+  "ticketRegistry": "0x...",
+  "clusterRegistry": "0x..."
 }
 JSON
 
 export SWARM_FUNDER_MNEMONIC="..."    # wallet con MON de testnet
+export PK="0x..."                     # deployer, para orquestar
 
-# El ataque, durante la ventana de cualificacion
+# Antes del pitch
+npm run swarm -- prefund --size 40
+npm run swarm -- check --size 40
+
+# La demo entera
+npm run swarm -- demo --size 40
+
+# O solo el ataque, si orquestas a mano
 npm run swarm -- attack --size 40
 
 # Variantes

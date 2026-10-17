@@ -1,10 +1,23 @@
 import {parseEther} from 'viem';
 
+import {preflight, runDemo} from './demo.js';
 import {exportDataset} from './export.js';
 import {DEFAULT_FUND_MON, prefundSwarm, runSwarm} from './swarm.js';
 
 const USAGE = `
-STYX swarm: simulador de adversario y exportador de datasets.
+STYX swarm: orquestador de la demo, simulador de adversario y exportador.
+
+  npm run swarm -- check [--size N]
+      Comprobacion previa. EJECUTALO ANTES DE SUBIR AL ESCENARIO.
+      Verifica RPC, contratos desplegados, fase de Enrollment, saldo del
+      deployer, prefondeo del enjambre, venv del detector y que el ciclo
+      quepa en el tiempo del pitch.
+
+  npm run swarm -- demo [--size N] [--jitter N] [--careful] [--no-swarm]
+      Ejecuta la demo completa de punta a punta: abre enrolamiento, lanza el
+      enjambre, cierra, abre cualificacion, sortea, exporta, detecta,
+      compromete el hallazgo y revoca. Imprime el resultado final.
+      Cada fase espera por ESTADO DE LA CADENA, no por reloj.
 
   npm run swarm -- prefund [--size N] [--fund MON]
       Fondea las wallets y para. HAZLO ANTES DEL PITCH: el fondeo es
@@ -49,6 +62,23 @@ async function main(): Promise<number> {
       fundWei: parseEther(value(args, 'fund') ?? DEFAULT_FUND_MON),
       deploymentPath: value(args, 'deployment'),
     });
+    return 0;
+  }
+
+  if (command === 'demo' || command === 'check') {
+    const demoOptions = {
+      size: Number(value(args, 'size') ?? 40),
+      jitterBlocks: Number(value(args, 'jitter') ?? 0),
+      careful: flag(args, 'careful'),
+      skipSwarm: flag(args, 'no-swarm'),
+    };
+    if (command === 'check') return preflight(demoOptions);
+    const problems = await preflight(demoOptions);
+    if (problems !== 0 && !flag(args, 'force')) {
+      process.stderr.write('\ncomprobacion previa fallida. Usa --force para ignorarla.\n');
+      return 1;
+    }
+    await runDemo(demoOptions);
     return 0;
   }
 

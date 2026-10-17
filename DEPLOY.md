@@ -122,7 +122,8 @@ cat > deployment.json <<'JSON'
   "enrollment":        "0x...",
   "heartbeatRegistry": "0x...",
   "lottery":           "0x...",
-  "ticketRegistry":    "0x..."
+  "ticketRegistry":    "0x...",
+  "clusterRegistry":   "0x..."
 }
 JSON
 ```
@@ -164,90 +165,97 @@ vez prefondeadas, `attack` las salta y arranca al instante.
 
 ---
 
-## 5. La demo, paso a paso
+## 5. Comprobación previa
 
-Ten tres terminales abiertas y las variables cargadas en las tres.
-
-### T-0 · Abrir enrolamiento
+**Esto va antes de subir al escenario, no después.**
 
 ```bash
-# Terminal 1
-cast send $ENROLLMENT "openEnrollment()" --private-key $PK --rpc-url $RPC
-export START_BLOCK=$(cast block-number --rpc-url $RPC)   # guardalo, lo pide el exportador
+cd swarm
+npm run swarm -- check --size 40
 ```
 
-Ahora se enrolan **los humanos** (vosotros y quien escanee el QR) y el enjambre:
+Verifica, en este orden: que el RPC responde, que los cinco contratos tienen
+código, que `Enrollment` sigue en fase `Created` (si no, hay que volver a
+desplegar para un ensayo limpio), que el deployer tiene saldo, que **las wallets
+del enjambre están prefondeadas**, que existe el venv del detector, y que el
+ciclo cabe en el tiempo del pitch.
 
-```bash
-# Terminal 2
-cd swarm && npm run swarm -- attack --size 40
-```
-
-El script se enrola y se queda esperando la ventana de cualificación.
-
-### T+25s · Cerrar enrolamiento y abrir cualificación
-
-```bash
-# Terminal 1
-cast send $ENROLLMENT "closeEnrollment()"      --private-key $PK --rpc-url $RPC
-cast send $HEARTBEATS "openQualification()"    --private-key $PK --rpc-url $RPC
-```
-
-El enjambre detecta la apertura y responde a los 5 retos automáticamente.
-Vosotros respondéis desde el frontend, un toque por reto.
-
-### T+70s · Sorteo
-
-```bash
-# Terminal 1
-cast send $LOTTERY "requestSeed()"  --private-key $PK --rpc-url $RPC
-sleep 3                                    # SEED_DELAY_BLOCKS = 4 bloques
-cast send $LOTTERY "finalizeSeed()" --private-key $PK --rpc-url $RPC
-```
-
-`finalizeSeed` abre la primera ronda. Los humanos reclaman desde el frontend y
-el enjambre reclama solo. Las entradas se acuñan **provisionales** y ya se ven en
-las wallets.
-
-### T+85s · Detectar y revocar
-
-```bash
-# Terminal 3
-cd swarm && npm run swarm -- export --from $START_BLOCK
-
-cd ../detector
-./.venv/bin/python -m styx_detector detect \
-    --input data/heartbeats.json --out data/report.json
-```
-
-El informe trae la raíz Merkle y **las pruebas de cada wallet marcada**.
-Compromételo y revoca:
-
-```bash
-cd ..
-export ROOT=$(python3 -c "import json;print(json.load(open('detector/data/report.json'))['merkle_root'])")
-
-cast send $CLUSTERS "commitFinding(bytes32,string,string)" \
-  $ROOT "ipfs://ruleset" "ipfs://dataset" --private-key $PK --rpc-url $RPC
-
-# Marcar y revocar cada wallet del cluster
-python3 - <<'PY' > revoke.sh
-import json, os
-r = json.load(open('detector/data/report.json'))
-for w, e in r['proofs'].items():
-    proof = '[' + ','.join(e['proof']) + ']'
-    print(f'cast send $CLUSTERS "markFlagged(address,uint256,bytes32[])" {w} {e["clusterId"]} "{proof}" --private-key $PK --rpc-url $RPC')
-    print(f'cast send $TICKETS "revoke(address)" {w} --private-key $PK --rpc-url $RPC')
-PY
-bash revoke.sh
-```
-
-En pantalla: las entradas del enjambre pasan a **REVOCADA**, su arte se
-desatura y se tacha. Las vuestras siguen vivas.
+Si sale `todo listo`, estás listo. Si no, te dice exactamente qué falta.
 
 ---
 
-## 6. Qué decir mientras corre
+## 6. La demo, con un solo comando
+
+```bash
+cd swarm
+npm run swarm -- demo --size 40
+```
+
+Eso es todo. El orquestador ejecuta las cuatro fases, lanza el enjambre en el
+momento correcto, corre el detector, compromete el hallazgo, revoca las entradas
+del enjambre e imprime el resultado.
+
+**Cada fase espera por estado de la cadena, no por reloj.** Lee `closesAt`,
+`windowEndBlock` y `seedBlock` de los contratos y actúa cuando la condición se
+cumple de verdad. Si la red tiene un hipo, la demo va **tarde en lugar de ir
+mal**, que es lo que importa cuando no puedes repetir un `cast` mal escrito
+delante de un jurado.
+
+Lo que verás:
+
+```
+[T+0.0s] === FASE 1: abrir enrolamiento ===
+  enrolamiento abierto. bloque inicial 71913265
+  los humanos ya pueden entrar desde el frontend o el QR
+[T+26.3s] === FASE 2: cerrar enrolamiento y abrir cualificacion ===
+  62 participantes enrolados
+  5 retos en instantes impredecibles
+[T+73.1s] === FASE 3: sorteo ===
+  semilla fijada desde el hash de un bloque futuro. el sorteo ya esta decidido
+  reclamar es recoger, no competir: llegar tarde no quita nada
+[T+94.8s] === FASE 4: deteccion y revocacion ===
+  el detector agrupo 40 wallets
+  hallazgo comprometido. raiz 0x...
+  marcadas 40, entradas revocadas 7
+
+=============== RESULTADO ===============
+entradas emitidas          10
+  conseguidas por el enjambre 7
+  revocadas al enjambre       7
+  en manos de personas        3
+entradas vivas             3
+=========================================
+```
+
+Esa última tabla es el cierre del pitch: **el enjambre se llevó 7 de 10 entradas
+y acabó con cero**.
+
+### Variantes para el Q&A
+
+```bash
+npm run swarm -- demo --size 40 --jitter 6     # el adversario descorrelaciona
+npm run swarm -- demo --size 40 --careful      # este ESCAPA, a proposito
+npm run swarm -- demo --no-swarm               # solo humanos, sin enjambre
+```
+
+### Si prefieres control manual
+
+El orquestador no es obligatorio. Las fases a mano:
+
+```bash
+cast send $ENROLLMENT "openEnrollment()"    --private-key $PK --rpc-url $RPC
+cast send $ENROLLMENT "closeEnrollment()"   --private-key $PK --rpc-url $RPC
+cast send $HEARTBEATS "openQualification()" --private-key $PK --rpc-url $RPC
+cast send $LOTTERY    "requestSeed()"       --private-key $PK --rpc-url $RPC
+cast send $LOTTERY    "finalizeSeed()"      --private-key $PK --rpc-url $RPC
+```
+
+Y el enjambre por separado con `npm run swarm -- attack --size 40`. Útil para
+ensayar, arriesgado en vivo.
+
+---
+
+## 7. Qué decir mientras corre
 
 Lo que el jurado tiene que entender en esos 90 segundos:
 
@@ -268,7 +276,7 @@ npm run swarm -- attack --size 40 --careful    # este ESCAPA, a proposito
 
 ---
 
-## 7. Cuando algo falle
+## 8. Cuando algo falle
 
 | Síntoma | Causa | Qué hacer |
 |---|---|---|
@@ -280,6 +288,9 @@ npm run swarm -- attack --size 40 --careful    # este ESCAPA, a proposito
 | `ChallengeUnverifiable` | La sub-ventana aún no empezó | Espera. El reto deriva de un bloque que todavía no existe |
 | El detector no marca nada | `minClusterSize` mayor que el enjambre | Está en 5. Con `--size 40` sobra |
 | `revoke` revierte con `DisputeWindowOver` | Pasaron los 20 s | Sube `dispute.windowSeconds` para el ensayo |
+| `check` dice que `Enrollment` no está en fase `Created` | Ya corriste un ensayo | Vuelve a desplegar. `Lottery` es inmutable a propósito |
+| `check` dice que faltan wallets prefondeadas | Te saltaste el paso 4 | `npm run swarm -- prefund --size 40` |
+| `demo` se queda esperando una fase | El orquestador espera por estado de cadena | Es lo correcto: va tarde en lugar de ir mal. Mira el bloque que imprime |
 
 ### Reiniciar el ensayo
 
@@ -289,7 +300,7 @@ a propósito. Para otra pasada, **vuelve a desplegar** (paso 3) y actualiza
 
 ---
 
-## 8. Lo que no hay que hacer
+## 9. Lo que no hay que hacer
 
 - **No despliegues a mainnet.** Nada de esto está auditado.
 - **No pongas fondos reales en las wallets del enjambre**: se derivan de una

@@ -210,12 +210,10 @@ async function qualify(
   params: ProtocolParams,
   options: SwarmOptions,
 ): Promise<void> {
-  const windowStart = await publicClient.readContract({
-    address: deployment.heartbeatRegistry,
-    abi: heartbeatAbi,
-    functionName: 'windowStartBlock',
-  });
-  if (windowStart === 0n) throw new Error('la ventana de cualificacion no esta abierta');
+  // The orchestrator launches the swarm right after enrolment opens, so the
+  // qualification window does not exist yet. Waiting here instead of failing is
+  // what lets the whole demo run from a single command.
+  const windowStart = await waitForQualification(publicClient, deployment);
 
   const cohort = await publicClient.readContract({
     address: deployment.heartbeatRegistry,
@@ -273,13 +271,9 @@ async function collect(
   deployment: Deployment,
   params: ProtocolParams,
 ): Promise<void> {
-  const open = await publicClient.readContract({
-    address: deployment.lottery,
-    abi: lotteryAbi,
-    functionName: 'isRoundOpen',
-  });
+  const open = await waitForLotteryRound(publicClient, deployment);
   if (!open) {
-    log('no hay ronda de sorteo abierta, nada que reclamar todavia');
+    log('no se abrio ninguna ronda de sorteo, nada que reclamar');
     return;
   }
 
@@ -338,6 +332,60 @@ function gasFor(options: SwarmOptions): {gasPrice: bigint; gas: bigint} {
   }
   const jitterGwei = BigInt(40 + Math.floor(Math.random() * 30)) * 1_000_000_000n;
   return {gasPrice: jitterGwei, gas: SWARM_GAS_LIMIT + BigInt(Math.floor(Math.random() * 20_000))};
+}
+
+/** Polls until the qualification window opens, up to a sane ceiling. */
+async function waitForQualification(
+  client: PublicClient,
+  deployment: Deployment,
+  timeoutMs = 180_000,
+): Promise<bigint> {
+  const deadline = Date.now() + timeoutMs;
+  let announced = false;
+
+  for (;;) {
+    const start = await client.readContract({
+      address: deployment.heartbeatRegistry,
+      abi: heartbeatAbi,
+      functionName: 'windowStartBlock',
+    });
+    if (start !== 0n) return start;
+
+    if (!announced) {
+      log('esperando que se abra la ventana de cualificacion...');
+      announced = true;
+    }
+    if (Date.now() > deadline) {
+      throw new Error('la ventana de cualificacion no se abrio a tiempo');
+    }
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  }
+}
+
+/** Polls until a lottery round is open. Returns false if none appears. */
+async function waitForLotteryRound(
+  client: PublicClient,
+  deployment: Deployment,
+  timeoutMs = 120_000,
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  let announced = false;
+
+  for (;;) {
+    const open = await client.readContract({
+      address: deployment.lottery,
+      abi: lotteryAbi,
+      functionName: 'isRoundOpen',
+    });
+    if (open) return true;
+    if (Date.now() > deadline) return false;
+
+    if (!announced) {
+      log('esperando que se abra una ronda de sorteo...');
+      announced = true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  }
 }
 
 async function waitForBlock(client: PublicClient, target: bigint): Promise<void> {

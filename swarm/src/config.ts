@@ -17,6 +17,7 @@ export interface ProtocolParams {
   };
   readonly enrollment: {readonly bondWei: string; readonly windowSeconds: number};
   readonly qualification: {
+    readonly windowSeconds: number;
     readonly challengeCount: number;
     readonly windowBlocks: number;
     readonly responseWindowBlocks: number;
@@ -24,6 +25,7 @@ export interface ProtocolParams {
     readonly minResponsesToQualify: number;
   };
   readonly sale: {readonly priceWei: string};
+  readonly dispute: {readonly windowSeconds: number};
 }
 
 export function loadParams(): ProtocolParams {
@@ -36,6 +38,7 @@ export interface Deployment {
   readonly heartbeatRegistry: Address;
   readonly lottery: Address;
   readonly ticketRegistry: Address;
+  readonly clusterRegistry: Address;
 }
 
 /** Addresses of the deployed contracts, written by the deploy step. */
@@ -46,7 +49,8 @@ export function loadDeployment(path?: string): Deployment {
   } catch {
     throw new Error(
       `no se pudo leer ${target}. Despliega primero y guarda las direcciones:\n` +
-        `  {"enrollment":"0x..","heartbeatRegistry":"0x..","lottery":"0x..","ticketRegistry":"0x.."}`,
+        `  {"enrollment":"0x..","heartbeatRegistry":"0x..","lottery":"0x..",\n` +
+        `   "ticketRegistry":"0x..","clusterRegistry":"0x.."}`,
     );
   }
 }
