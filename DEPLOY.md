@@ -381,8 +381,41 @@ npm run swarm -- attack --size 40 --careful    # este ESCAPA, a proposito
 ### Reiniciar el ensayo
 
 Los contratos no se reinician: `Lottery` es inmutable una vez abierta una venta,
-a propósito. Para otra pasada, **vuelve a desplegar** (paso 3) y actualiza
-`deployment.json`. Es rápido y deja el ensayo limpio.
+a propósito, y `Enrollment` no vuelve de `Closed` a `Created`. Cada ensayo exige
+un despliegue nuevo.
+
+Para que eso no sea un suplicio, usa el script de la raíz:
+
+```bash
+export RPC="https://testnet-rpc.monad.xyz"
+export STYX_RESOLVER="0x..."
+./redeploy.sh
+```
+
+Despliega, extrae las cinco direcciones, escribe `deployment.json`, sincroniza
+`web/.env.local` y **verifica en la cadena** que el slasher quedó conectado y que
+`Enrollment` está en fase 0. Si algo de eso falla, aborta en lugar de dejarte un
+despliegue a medias.
+
+Si usas Vercel, acuérdate de actualizar allí las cinco `NEXT_PUBLIC_*_ADDRESS` y
+**redesplegar**: se incrustan en el build.
+
+### Avisos de la wallet en subdominios de Vercel
+
+Si la dapp vive en `*.vercel.app`, las wallets mostrarán un aviso de phishing o
+de contrato malicioso **al conectar**. No es el código: esos subdominios son de
+los hospedajes más usados por los drenadores reales, así que los motores de
+seguridad aplican la regla razonable de *subdominio gratuito nuevo que pide
+conectar wallet = sospechoso*.
+
+Por eficacia: **dominio propio** (el arreglo real, unos dólares al año), pedir
+revisión del falso positivo (MetaMask acepta issues en `eth-phishing-detect`,
+Phantom y Rabby usan Blockaid; tarda días), o **presentar desde `localhost`**,
+que no dispara el aviso.
+
+No intentes esquivar la detección: no funciona de forma estable y esas
+heurísticas protegen a gente real. Si presentas desde Vercel, anticípalo en voz
+alta antes de que lo vea el jurado.
 
 ---
 
