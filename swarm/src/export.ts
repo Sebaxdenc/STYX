@@ -102,7 +102,8 @@ export async function exportDataset(options: ExportOptions): Promise<void> {
  * `-32614`. At 300 ms per block that is only 30 seconds of history, so even a
  * single qualification window (150 blocks) has to be fetched in chunks.
  */
-const LOG_RANGE_LIMIT = 100n;
+// Alchemy Free accepts at most 10 blocks per eth_getLogs request.
+const LOG_RANGE_LIMIT = 10n;
 
 /** Single typed range query. Keeps the ABI inference that chunking would erase. */
 async function getHeartbeatRange(
