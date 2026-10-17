@@ -95,3 +95,72 @@ def test_params_digest_is_order_independent_but_value_sensitive():
 
     assert a == b, "el orden de las claves no debe cambiar la huella"
     assert a != c, "un valor distinto debe cambiar la huella"
+
+
+# --------------------------------------------------------------------- pruebas
+
+
+def test_proof_round_trips_for_every_leaf():
+    """Toda hoja debe poder probar su pertenencia.
+
+    Sin esto el compromiso onchain no sirve de nada: markFlagged exige una
+    prueba, y sin marcar no hay revocacion.
+    """
+    from styx_detector.commitment import merkle_proof, verify_proof
+
+    for count in (1, 2, 3, 4, 5, 7, 8, 9, 16, 17, 33):
+        assignments = [(f"0x{i:040x}", i % 3) for i in range(count)]
+        leaves = [leaf_hash(w, c) for w, c in assignments]
+        root = cluster_merkle_root(assignments)
+
+        for leaf in leaves:
+            proof = merkle_proof(leaves, leaf)
+            assert verify_proof(leaf, proof, root), f"fallo con {count} hojas"
+
+
+def test_proof_fails_for_a_leaf_outside_the_tree():
+    from styx_detector.commitment import merkle_proof, verify_proof
+
+    assignments = [(f"0x{i:040x}", 0) for i in range(8)]
+    leaves = [leaf_hash(w, c) for w, c in assignments]
+    root = cluster_merkle_root(assignments)
+
+    intruder = leaf_hash("0x" + "ee" * 20, 0)
+    proof = merkle_proof(leaves, leaves[0])
+
+    assert not verify_proof(intruder, proof, root)
+
+
+def test_proof_fails_when_cluster_id_is_changed():
+    """Cambiar el clusterId cambia la hoja, asi que la prueba deja de valer."""
+    from styx_detector.commitment import merkle_proof, verify_proof
+
+    assignments = [(f"0x{i:040x}", 1) for i in range(8)]
+    leaves = [leaf_hash(w, c) for w, c in assignments]
+    root = cluster_merkle_root(assignments)
+
+    proof = merkle_proof(leaves, leaves[0])
+    tampered = leaf_hash(f"0x{0:040x}", 999)
+
+    assert not verify_proof(tampered, proof, root)
+
+
+def test_missing_leaf_is_rejected():
+    from styx_detector.commitment import merkle_proof
+
+    leaves = [leaf_hash(f"0x{i:040x}", 0) for i in range(4)]
+    with pytest.raises(ValueError, match="no esta en el arbol"):
+        merkle_proof(leaves, leaf_hash("0x" + "ff" * 20, 0))
+
+
+def test_cluster_proofs_covers_every_assignment():
+    from styx_detector.commitment import cluster_proofs, verify_proof
+
+    assignments = [(f"0x{i:040x}", i % 2) for i in range(11)]
+    root = cluster_merkle_root(assignments)
+    proofs = cluster_proofs(assignments)
+
+    assert len(proofs) == len(assignments)
+    for wallet, entry in proofs.items():
+        leaf = leaf_hash(wallet, entry["clusterId"])
+        assert verify_proof(leaf, entry["proof"], root)

@@ -340,6 +340,41 @@ contract ClusterRegistryTest is Test {
         reg.requestForfeit(wallet);
     }
 
+    // ----------------------------------------- compatibilidad con el detector
+
+    /// @notice Una prueba generada por el detector en Python debe validar aqui.
+    ///
+    /// @dev Este es el test que cierra el circulo del sistema. El detector corre
+    ///      fuera de la cadena y publica una raiz; si su construccion del arbol
+    ///      y la verificacion de este contrato divergen, nadie puede marcar una
+    ///      wallet, nadie puede revocar una entrada, y la deteccion se queda en
+    ///      un informe sin consecuencias.
+    ///
+    ///      Fixture generado con cinco hojas a proposito, porque fuerza el caso
+    ///      del nodo impar promocionado sin hashear en dos niveles distintos,
+    ///      que es donde las implementaciones suelen separarse.
+    ///
+    ///          detector/styx_detector/commitment.py :: cluster_proofs
+    function test_verifiesProofGeneratedByThePythonDetector() public {
+        bytes32 pythonRoot = 0x3e3d4a1f98ac470069b159db0063ff84f945f9c2add1bf4610e98a5f8cd3682b;
+        address wallet = 0x00000000000000000000000000000000000000A2;
+        uint256 clusterId = 0;
+
+        bytes32[] memory proof = new bytes32[](3);
+        proof[0] = 0xd7d4e4b823e955a9c09e7ccb2e990a82dec59385d2eb23beecdc01071bae1352;
+        proof[1] = 0xb6fcd33c1c1306cbcc61f20aa3a67cc051fdbd1294abd80e5f068218c6053bfb;
+        proof[2] = 0xfa9305b8b21a759b1538ccd3da0b0c96fc16e1de29bcdf0783aec4848c62be7e;
+
+        ClusterRegistry fresh =
+            new ClusterRegistry(address(enr), resolver, APPEAL_BOND, DISPUTE_WINDOW);
+        fresh.commitFinding(pythonRoot, "ipfs://ruleset", "ipfs://dataset");
+
+        fresh.markFlagged(wallet, clusterId, proof);
+
+        assertTrue(fresh.isFlagged(wallet), "la prueba de Python debe validar en Solidity");
+        assertEq(fresh.weightMultiplierBps(wallet), fresh.FLAGGED_MULTIPLIER_BPS());
+    }
+
     // ------------------------------------------------------------------ fuzz
 
     function testFuzz_onlyCommittedLeavesCanBeFlagged(address wallet, uint256 clusterId) public {

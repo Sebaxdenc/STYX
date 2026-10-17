@@ -56,6 +56,49 @@ const SWARM_MNEMONIC =
 const SWARM_GAS_PRICE = 55_000_000_000n;
 const SWARM_GAS_LIMIT = 120_000n;
 
+/**
+ * Monad's reserve balance makes under-funding bite twice.
+ *
+ * At consensus time an account's budget for the gas of ALL its in-flight
+ * transactions is `min(10 MON, balance)`, so a thin balance limits bursts and
+ * not just the total spend. And each wallet here runs roughly eight
+ * transactions: enrol, five heartbeats, claim entitlement, claim ticket. At
+ * 55 gwei and a 120k limit that is about 0.0066 MON each, plus the bond.
+ *
+ *     8 x 0.0066 + bond  =~ 0.06 MON of hard floor
+ *
+ * 0.05 MON, the first default used here, therefore ran out mid-run. Funding with
+ * room is the documented practice.
+ */
+export const DEFAULT_FUND_MON = '0.2';
+
+/**
+ * Funds the swarm wallets and stops.
+ *
+ * Kept as its own step because funding is sequential, one transaction per wallet
+ * from a single funder, and forty of them do not fit inside the 25 second
+ * enrolment window of the demo. Run this before the pitch; `attack` then skips
+ * any wallet that already has a balance and starts immediately.
+ */
+export async function prefundSwarm(options: SwarmOptions): Promise<void> {
+  const params = loadParams();
+  const chain = monadTestnet(params);
+  const publicClient = createPublicClient({chain, transport: http()}) as PublicClient;
+  const funder = mnemonicToAccount(requireEnv('SWARM_FUNDER_MNEMONIC'));
+  const funderClient = createWalletClient({account: funder, chain, transport: http()});
+
+  const bots = Array.from({length: options.size}, (_, i) =>
+    mnemonicToAccount(SWARM_MNEMONIC, {addressIndex: i + 1}),
+  );
+
+  log(`prefondeo de ${bots.length} wallets desde ${funder.address}`);
+  await fund(funderClient, publicClient, bots, options);
+
+  let total = 0n;
+  for (const bot of bots) total += await publicClient.getBalance({address: bot.address});
+  log(`saldo total del enjambre: ${total} wei`);
+}
+
 export async function runSwarm(options: SwarmOptions): Promise<void> {
   const params = loadParams();
   const chain = monadTestnet(params);
@@ -167,12 +210,10 @@ async function qualify(
   params: ProtocolParams,
   options: SwarmOptions,
 ): Promise<void> {
-  const windowStart = await publicClient.readContract({
-    address: deployment.heartbeatRegistry,
-    abi: heartbeatAbi,
-    functionName: 'windowStartBlock',
-  });
-  if (windowStart === 0n) throw new Error('la ventana de cualificacion no esta abierta');
+  // The orchestrator launches the swarm right after enrolment opens, so the
+  // qualification window does not exist yet. Waiting here instead of failing is
+  // what lets the whole demo run from a single command.
+  const windowStart = await waitForQualification(publicClient, deployment);
 
   const cohort = await publicClient.readContract({
     address: deployment.heartbeatRegistry,
@@ -230,13 +271,9 @@ async function collect(
   deployment: Deployment,
   params: ProtocolParams,
 ): Promise<void> {
-  const open = await publicClient.readContract({
-    address: deployment.lottery,
-    abi: lotteryAbi,
-    functionName: 'isRoundOpen',
-  });
+  const open = await waitForLotteryRound(publicClient, deployment);
   if (!open) {
-    log('no hay ronda de sorteo abierta, nada que reclamar todavia');
+    log('no se abrio ninguna ronda de sorteo, nada que reclamar');
     return;
   }
 
@@ -295,6 +332,60 @@ function gasFor(options: SwarmOptions): {gasPrice: bigint; gas: bigint} {
   }
   const jitterGwei = BigInt(40 + Math.floor(Math.random() * 30)) * 1_000_000_000n;
   return {gasPrice: jitterGwei, gas: SWARM_GAS_LIMIT + BigInt(Math.floor(Math.random() * 20_000))};
+}
+
+/** Polls until the qualification window opens, up to a sane ceiling. */
+async function waitForQualification(
+  client: PublicClient,
+  deployment: Deployment,
+  timeoutMs = 180_000,
+): Promise<bigint> {
+  const deadline = Date.now() + timeoutMs;
+  let announced = false;
+
+  for (;;) {
+    const start = await client.readContract({
+      address: deployment.heartbeatRegistry,
+      abi: heartbeatAbi,
+      functionName: 'windowStartBlock',
+    });
+    if (start !== 0n) return start;
+
+    if (!announced) {
+      log('esperando que se abra la ventana de cualificacion...');
+      announced = true;
+    }
+    if (Date.now() > deadline) {
+      throw new Error('la ventana de cualificacion no se abrio a tiempo');
+    }
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  }
+}
+
+/** Polls until a lottery round is open. Returns false if none appears. */
+async function waitForLotteryRound(
+  client: PublicClient,
+  deployment: Deployment,
+  timeoutMs = 120_000,
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  let announced = false;
+
+  for (;;) {
+    const open = await client.readContract({
+      address: deployment.lottery,
+      abi: lotteryAbi,
+      functionName: 'isRoundOpen',
+    });
+    if (open) return true;
+    if (Date.now() > deadline) return false;
+
+    if (!announced) {
+      log('esperando que se abra una ronda de sorteo...');
+      announced = true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  }
 }
 
 async function waitForBlock(client: PublicClient, target: bigint): Promise<void> {

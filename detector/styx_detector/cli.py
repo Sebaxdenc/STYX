@@ -14,6 +14,7 @@ import sys
 from dataclasses import asdict
 from pathlib import Path
 
+from .commitment import cluster_proofs
 from .model import Heartbeat
 from .params import load_config
 from .pipeline import run_detection
@@ -99,6 +100,7 @@ def _detect(args) -> int:
 
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)
+        assignments = [(w, c.cluster_id) for c in report.clusters for w in c.members]
         args.out.write_text(
             json.dumps(
                 {
@@ -107,12 +109,16 @@ def _detect(args) -> int:
                     "wallet_count": report.wallet_count,
                     "round_count": report.round_count,
                     "clusters": [asdict(c) for c in report.clusters],
+                    # Sin las pruebas el compromiso onchain es inutil: markFlagged
+                    # las exige, y sin marcar no hay revocacion.
+                    "proofs": cluster_proofs(sorted(assignments)),
                 },
                 indent=2,
             ),
             encoding="utf-8",
         )
         print(f"informe escrito en : {args.out}")
+        print(f"pruebas incluidas  : {len(report.flagged_wallets)}")
 
     return 0
 
