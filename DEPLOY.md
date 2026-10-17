@@ -76,7 +76,7 @@ cat > .env.local <<'EOF'
 export RPC="https://monad-testnet.g.alchemy.com/v2/TU_CLAVE"
 export MONAD_RPC="$RPC"
 export PK="0x...clave privada del deployer..."
-export SWARM_FUNDER_MNEMONIC="doce palabras del funder del enjambre"
+export SWARM_FUNDER_PRIVATE_KEY="0x...clave del funder del enjambre..."
 export STYX_RESOLVER="0x...direccion que resuelve apelaciones..."
 EOF
 source .env.local

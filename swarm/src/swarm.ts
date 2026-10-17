@@ -14,9 +14,9 @@ import {mnemonicToAccount, type HDAccount} from 'viem/accounts';
 import {enrollmentAbi, heartbeatAbi, lotteryAbi, ticketAbi} from './abi.js';
 import {
   loadDeployment,
+  loadFunderAccount,
   loadParams,
   monadTestnet,
-  requireEnv,
   subWindowBlocks,
   type Deployment,
   type ProtocolParams,
@@ -84,7 +84,7 @@ export async function prefundSwarm(options: SwarmOptions): Promise<void> {
   const params = loadParams();
   const chain = monadTestnet(params);
   const publicClient = createPublicClient({chain, transport: http()}) as PublicClient;
-  const funder = mnemonicToAccount(requireEnv('SWARM_FUNDER_MNEMONIC'));
+  const funder = loadFunderAccount();
   const funderClient = createWalletClient({account: funder, chain, transport: http()});
 
   const bots = Array.from({length: options.size}, (_, i) =>
@@ -105,7 +105,7 @@ export async function runSwarm(options: SwarmOptions): Promise<void> {
   const deployment = loadDeployment(options.deploymentPath);
 
   const publicClient = createPublicClient({chain, transport: http()}) as PublicClient;
-  const funder = mnemonicToAccount(requireEnv('SWARM_FUNDER_MNEMONIC'));
+  const funder = loadFunderAccount();
   const funderClient = createWalletClient({account: funder, chain, transport: http()});
 
   const bots = Array.from({length: options.size}, (_, i) =>
