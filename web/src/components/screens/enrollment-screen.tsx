@@ -8,7 +8,7 @@ import { useCountdown } from "@/hooks/use-countdown";
 import { useEnrollment } from "@/hooks/use-enrollment";
 import { useWallet } from "@/hooks/use-wallet";
 import { formatCount, formatDuration, formatMon } from "@/lib/format";
-import { params, secondsToHours, secondsToMinutes } from "@/lib/protocol";
+import { params } from "@/lib/protocol";
 
 export function EnrollmentScreen() {
   const { status } = useWallet();
@@ -52,7 +52,7 @@ export function EnrollmentScreen() {
         */}
         <p className="mt-4 max-w-2xl text-lg leading-relaxed text-muted-foreground">
           Llegar primero no da ninguna ventaja. La ventana dura{" "}
-          {secondsToHours(params.enrollment.windowSeconds)} horas y las entradas se reparten
+          {formatDuration(params.enrollment.windowSeconds)} y las entradas se reparten
           después por sorteo, no por orden de llegada.
         </p>
       </header>
@@ -121,9 +121,9 @@ export function EnrollmentScreen() {
               }
               hint={
                 config !== null && config.windowStartBlock > 0n
-                  ? `${config.challengeCount} retos en ${secondsToMinutes(
+                  ? `${config.challengeCount} retos en ${formatDuration(
                       params.qualification.windowSeconds,
-                    )} minutos`
+                    )}`
                   : "El contrato no fija su inicio por adelantado: empieza cuando el organizador la abre"
               }
               mono
