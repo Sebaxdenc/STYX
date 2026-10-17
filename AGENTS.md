@@ -1,60 +1,73 @@
 # AGENTS.md
 
-Conventions and binding constraints for humans and coding agents working in
-this repository.
+Convenciones y restricciones vinculantes para personas y agentes de código que
+trabajen en este repositorio.
 
-Read [README.md](./README.md) for the problem and
-[ARCHITECTURE.md](./ARCHITECTURE.md) for the design before writing code. This
-file is the operational rulebook, not a summary of either.
-
----
-
-## Project in one paragraph
-
-STYX allocates high-demand event tickets through an onchain qualification
-window followed by a verifiable lottery, and identifies coordinated bot swarms
-by analysing transaction timing data that the chain records natively. It runs on
-Monad because 300 ms blocks provide the temporal resolution the detection
-depends on. The project does not claim to detect bots; it detects coordination.
+Lee [README.md](./README.md) para el problema y
+[ARCHITECTURE.md](./ARCHITECTURE.md) para el diseño antes de escribir código.
+Este archivo es el reglamento operativo, no un resumen de los otros dos.
 
 ---
 
-## Stack and layout
+## El proyecto en un párrafo
+
+STYX reparte entradas de eventos de alta demanda mediante una ventana de
+cualificación en la cadena seguida de un sorteo verificable, e identifica
+enjambres de bots coordinados analizando datos de temporización de transacciones
+que la cadena registra de forma nativa. Corre sobre Monad porque los bloques de
+300 ms aportan la resolución temporal de la que depende la detección. El
+proyecto no afirma detectar bots: detecta coordinación.
+
+---
+
+## Idioma
+
+- **Documentación en español.** Los tres archivos `.md` de la raíz y cualquier
+  documento nuevo.
+- **Código en inglés.** Identificadores, nombres de funciones, comentarios,
+  mensajes de error y nombres de ficheros. Mezclar idiomas dentro del código
+  produce bases de código peores.
+- **Mensajes de commit:** prefijo en inglés (`feat:`, `fix:`), descripción en
+  español.
+
+Solo el nombre del proyecto tiene temática griega. Los contratos y módulos
+llevan **nombres descriptivos en inglés**; no reintroduzcas nombres mitológicos
+para los componentes.
+
+---
+
+## Stack y estructura
 
 ```
 contracts/    Solidity, Foundry
-indexer/      TypeScript, viem        onchain events to feature matrix
-detector/     Python                  clustering and statistics
-web/          TypeScript, Next.js     demo and swarm visualisation
+indexer/      TypeScript, viem        eventos onchain a matriz de features
+detector/     Python                  clustering y estadistica
+web/          TypeScript, Next.js     demo y visualizacion del enjambre
 ```
 
-Python is used for the detector because the clustering and statistical work
-depends on `networkx`, `scikit-learn` and `scipy`. Do not reimplement it in
-TypeScript to reduce stack count.
+Python se usa en el detector porque el clustering y el trabajo estadístico
+dependen de `networkx`, `scikit-learn` y `scipy`. No lo reimplementes en
+TypeScript para reducir el número de lenguajes.
 
-### Contracts
+### Contratos
 
-| Contract | Responsibility |
+| Contrato | Responsabilidad |
 |---|---|
-| `Caronte` | Enrolment, refundable bond, partial forfeit on abandonment |
-| `Obolo` | Challenge issuance, heartbeat verification, vigil score |
-| `Laquesis` | Verifiable random allotment, capped weighting. Immutable once a sale opens |
-| `Eliseo` | Ticket issuance, identity-bound redemption, official return channel |
-| `Argos` | Cluster commitments, challenge game, bond slashing |
-
-Names come from the Greek underworld and are domain vocabulary, not decoration.
-Keep them. Use English for all code, comments and documentation; the module
-names stay as they are.
+| `Enrollment` | Enrolamiento, bono reembolsable, penalización parcial por abandono |
+| `HeartbeatRegistry` | Emisión de retos, verificación de latidos, `participationScore` |
+| `Lottery` | Reparto aleatorio verificable con ponderación topada. Inmutable una vez abierta una venta |
+| `TicketRegistry` | Emisión de entradas, redención ligada a identidad, canal oficial de devolución |
+| `ClusterRegistry` | Compromisos de clúster, juego de impugnación, slashing de bonos |
 
 ---
 
-## Commands
+## Comandos
 
 ```
-# contracts
+# contratos
 cd contracts && forge build
 cd contracts && forge test -vvv
-cd contracts && forge test --gas-report      # required before changing capacity claims
+cd contracts && forge test --gas-report      # obligatorio antes de tocar cifras de capacidad
 cd contracts && forge fmt
 
 # indexer
@@ -67,184 +80,219 @@ cd detector && pip install -r requirements.txt && pytest
 cd web && npm install && npm run build
 ```
 
-Never start long-running processes such as `npm run dev`, watch modes, or a
-local node left in the foreground. Use single-run flags.
+No arranques procesos de larga duración como `npm run dev`, modos watch, ni un
+nodo local en primer plano. Usa flags de ejecución única.
 
 ---
 
-## Network configuration
+## Configuración de red
 
-Canonical values. Do not hardcode anything not listed here without checking
-`https://docs.monad.xyz/ai/current-facts` first.
+Valores canónicos. No hardcodees nada que no esté en esta tabla sin consultar
+antes `https://docs.monad.xyz/ai/current-facts`.
 
-| Network | Chain ID | RPC | Explorer |
+| Red | Chain ID | RPC | Explorador |
 |---|---|---|---|
 | Monad Mainnet | 143 | `https://rpc.monad.xyz` | MonadVision, Monadscan |
 | Monad Testnet | 10143 | `https://testnet-rpc.monad.xyz` | MonadVision, Monadscan |
 
-Native currency `MON`. Testnet faucet `https://faucet.monad.xyz`.
+Moneda nativa `MON`. Faucet de testnet `https://faucet.monad.xyz`.
 
-Performance figures used in documentation: 300 ms block time, 300 ms
-speculative finality, 600 ms finality, 150M block gas limit, 500M gas/s, 30M
-per-transaction gas limit, 10,000+ TPS design capacity.
+Cifras de rendimiento usadas en la documentación: bloque de 300 ms, finalidad
+especulativa de 300 ms, finalidad de 600 ms, límite de 150M gas por bloque, 500M
+gas/s, límite de 30M gas por transacción, 10.000+ TPS de capacidad de diseño.
 
-Never deploy to mainnet from automation. Testnet only unless a human explicitly
-asks otherwise.
-
----
-
-## Design invariants
-
-These are not style preferences. Violating one is a design regression, and a
-pull request that does so should be rejected even if tests pass.
-
-**1. No personal data on chain or on IPFS. Ever.**
-Only commitments, nullifiers and pseudonymous addresses. No IP addresses, no
-device fingerprints, no document data. Encrypting does not make it acceptable:
-a contract cannot read ciphertext, and a key placed on chain is published.
-
-**2. Prefer relative signals over absolute thresholds.**
-All detection logic is public, so a fixed threshold is a specification for
-evading it. A new signal must compare a participant against the population, not
-against a constant. If you cannot express it that way, justify the exception in
-the pull request. See the core design law in ARCHITECTURE.md section 1.
-
-**3. Detection modulates weight. It never silently excludes.**
-Every cluster finding must reduce lottery weight and open a challenge, with an
-appeal path and published exclusion rates. No code path may deny participation
-on an automated score alone.
-
-**4. No hot storage slot in any high-frequency path.**
-A single shared counter incremented by every heartbeat serialises the entire
-block under optimistic parallel execution. Prefer emitting events and deriving
-totals off chain. If a counter is unavoidable, shard it and sum on read.
-
-**5. The permissionless path always exists.**
-Participation must never require passing through an interface, relayer or
-attester that the project controls. Attested paths may offer better terms; they
-may not be mandatory.
-
-**6. No single trusted party on the critical path.**
-Where offchain data is genuinely required, use `k`-of-`n` signed attestations
-committing a hash. A relayer may censor but must never be able to forge, and
-self-submission must remain available.
-
-**7. `Laquesis` is immutable once a sale opens.**
-No proxy, no upgrade path, no admin function that can influence a draw.
-Privileged functions elsewhere sit behind a timelock.
-
-**8. Assume the adversary has read this repository.**
-Security must not depend on any detail being secret. If a mechanism only works
-while undocumented, it does not work.
-
-**9. Do not expand OWASP claims.**
-The mapping in ARCHITECTURE.md is deliberately narrow. Do not add categories to
-documentation, marketing copy or interface text without a concrete technical
-justification tied to a specific control.
-
-**10. Do not weaken the honesty sections.**
-The limitations and rejected-approaches sections exist to prevent rediscovering
-dead ends and to keep claims defensible. Extend them; do not trim them.
+Nunca despliegues a mainnet desde automatización. Solo testnet, salvo que una
+persona lo pida explícitamente.
 
 ---
 
-## Coding conventions
+## Invariantes de diseño
+
+No son preferencias de estilo. Violar una es una regresión de diseño, y un pull
+request que lo haga debe rechazarse aunque los tests pasen.
+
+**1. Nunca datos personales en la cadena ni en IPFS. Jamás.**
+Solo compromisos, nullifiers y direcciones pseudónimas. Sin direcciones IP, sin
+huellas de dispositivo, sin datos documentales. Cifrar no lo hace aceptable: un
+contrato no puede leer texto cifrado, y una clave colocada en la cadena está
+publicada.
+
+**2. Prefiere señales relativas a umbrales absolutos.**
+Toda la lógica de detección es pública, así que un umbral fijo es una
+especificación de cómo evadirla. Una señal nueva debe comparar al participante
+contra la población, no contra una constante. Si no puedes expresarla así,
+justifica la excepción en el pull request. Ver la ley de diseño central en
+ARCHITECTURE.md sección 1.
+
+**3. La detección modula el peso. Nunca excluye en silencio.**
+Todo hallazgo de clúster debe reducir el peso en el sorteo y abrir una
+impugnación, con vía de apelación y tasas de exclusión publicadas. Ningún camino
+de código puede denegar participación basándose solo en un score automatizado.
+
+**4. Ningún slot de almacenamiento caliente en caminos de alta frecuencia.**
+Un único contador compartido incrementado por cada latido serializa el bloque
+entero bajo ejecución paralela optimista. Prefiere emitir eventos y derivar los
+totales fuera de la cadena. Si un contador es inevitable, fragméntalo y suma en
+lectura.
+
+**5. La vía sin permisos siempre existe.**
+Participar nunca debe requerir pasar por una interfaz, relayer o atestador que
+el proyecto controle. Las vías atestadas pueden ofrecer mejores condiciones; no
+pueden ser obligatorias.
+
+**6. Ningún tercero de confianza en el camino crítico.**
+Donde se necesiten datos externos de verdad, usa atestaciones firmadas
+`k`-de-`n` que comprometan un hash. Un relayer puede censurar pero nunca debe
+poder falsificar, y el autoenvío debe seguir disponible.
+
+**7. `Lottery` es inmutable una vez abierta una venta.**
+Sin proxy, sin ruta de actualización, sin función de administración que pueda
+influir en un sorteo. Las funciones privilegiadas en otros contratos van detrás
+de un timelock.
+
+**8. Asume que el adversario ha leído este repositorio.**
+La seguridad no debe depender de que ningún detalle sea secreto. Si un mecanismo
+solo funciona mientras no está documentado, no funciona.
+
+**9. No amplíes las afirmaciones OWASP.**
+El mapeo de ARCHITECTURE.md sección 6 es deliberadamente estrecho. No añadas
+categorías a la documentación, al material de presentación ni a los textos de la
+interfaz sin una justificación técnica concreta ligada a un control específico.
+
+**10. No debilites las secciones de honestidad.**
+Las secciones de limitaciones y de enfoques descartados existen para evitar
+redescubrir callejones sin salida y para mantener las afirmaciones defendibles.
+Amplíalas; no las recortes.
+
+---
+
+## Convenciones de código
 
 ### Solidity
 
-- Target the Solidity version pinned in `foundry.toml`. Do not float it.
-- Custom errors, not revert strings.
-- Checks, then effects, then interactions. Reentrancy guards on claim, refund
-  and slashing paths.
-- Validate every input: round index, deadline, phase, signature, caller.
-- Explicit phase state machine. No implicit transitions driven by timestamps
-  alone.
-- EIP-712 for all signed payloads, with a domain separator including chain ID
-  and contract address. Nonces or block binding on anything replayable.
-- Never use `block.timestamp` where a block number is the correct unit.
-  Heartbeat latency is measured in blocks.
-- `immutable` and `constant` wherever possible; storage costs matter at this
-  transaction volume.
-- Emit an event for every state change the indexer or detector needs. The event
-  schema is a public interface; changing it is a breaking change.
+- Usa la versión de Solidity fijada en `foundry.toml`. No la dejes flotar.
+- Errores personalizados, no cadenas de revert.
+- Primero comprobaciones, después efectos, después interacciones. Guardas de
+  reentrada en los caminos de reclamo, reembolso y slashing.
+- Valida toda entrada: índice de ronda, plazo, fase, firma, llamante.
+- Máquina de estados de fases explícita. Sin transiciones implícitas guiadas solo
+  por timestamps.
+- EIP-712 para todo payload firmado, con separador de dominio que incluya chain
+  ID y dirección del contrato. Nonces o anclaje a bloque en cualquier cosa
+  reproducible.
+- Nunca uses `block.timestamp` donde la unidad correcta sea el número de bloque.
+  La latencia de los latidos se mide en bloques.
+- `immutable` y `constant` siempre que sea posible; el coste de almacenamiento
+  importa a este volumen de transacciones.
+- Emite un evento por cada cambio de estado que necesiten el indexer o el
+  detector. El esquema de eventos es una interfaz pública: cambiarlo es un cambio
+  rompedor.
 
 ### TypeScript
 
-- Strict mode. No `any`. `viem` for chain access, not `ethers`.
-- Indexer must be deterministic and resumable: given the same block range it
-  produces the same feature matrix.
+- Modo estricto. Sin `any`. `viem` para acceso a la cadena, no `ethers`.
+- El indexer debe ser determinista y reanudable: dado el mismo rango de bloques
+  produce la misma matriz de features.
 
 ### Python
 
-- Type hints on public functions. `ruff` for linting, `black` for formatting.
-- The detector must be reproducible: fixed random seeds, pinned dependency
-  versions, and a committed ruleset file. A third party must be able to rerun it
-  on the published dataset and obtain the identical cluster assignment. This is
-  a correctness requirement, not a nicety, because reproducibility is what the
-  challenge game verifies.
+- Type hints en funciones públicas. `ruff` para linting, `black` para formato.
+- El detector debe ser reproducible: semillas aleatorias fijas, versiones de
+  dependencias pinneadas y fichero de ruleset versionado. Un tercero debe poder
+  reejecutarlo sobre el dataset publicado y obtener la asignación de clúster
+  idéntica. Es un requisito de correctitud, no un detalle, porque la
+  reproducibilidad es lo que verifica el juego de impugnación.
+- No uses componentes conexas para agrupar. Con millones de aristas espurias el
+  grafo se fusiona por percolación. Usa Louvain o clustering espectral. Ver
+  ARCHITECTURE.md sección 3.
 
 ---
 
-## Testing requirements
+## Requisitos de testing
 
-- Every contract needs unit tests for the happy path, every revert condition,
-  and phase boundary behaviour.
-- Fuzz the allotment: for any participant set and randomness, assert
-  `tickets_issued <= inventory` and at most one allocation per qualified
-  identity.
-- Test the adversary explicitly. A test suite that only proves honest
-  participants succeed is incomplete. Include a swarm simulation and assert that
-  the detector clusters it, including a jittered variant.
-- Run `forge test --gas-report` and update ARCHITECTURE.md section 4 whenever
-  heartbeat gas cost changes. The capacity numbers there are estimates flagged
-  for replacement with measured values.
-
----
-
-## Do not build
-
-Rejected with reasoning in ARCHITECTURE.md section 6. Do not reintroduce:
-
-IP collection or geolocation. Device or browser fingerprinting. Click, mouse or
-keystroke telemetry. Hash-based or memory-hard client puzzles as a bot defence.
-Machine learning inference inside a contract. Any secret risk or dangerousness
-score. Absolute timing thresholds as rules. A virtual waiting room as an
-allocation mechanism. Personal data storage of any kind, anywhere.
-
-A client puzzle is acceptable in exactly one place: edge rate limiting to keep
-the RPC proxy and frontend available during a demand spike, labelled as a rate
-limiter and never presented as a bot defence.
+- Todo contrato necesita tests unitarios del camino feliz, de cada condición de
+  revert y del comportamiento en los límites de fase.
+- Fuzzea el reparto: para cualquier conjunto de participantes y cualquier
+  aleatoriedad, verifica `entradas_emitidas <= inventario` y como máximo una
+  asignación por identidad cualificada.
+- **Testea al adversario explícitamente.** Una suite que solo demuestra que los
+  participantes honestos tienen éxito está incompleta. Incluye una simulación de
+  enjambre y verifica que el detector lo agrupa, incluida una variante con
+  jitter.
+- Ejecuta `forge test --gas-report` y actualiza ARCHITECTURE.md sección 4 cuando
+  cambie el coste de gas del latido. Las cifras de capacidad de ahí son
+  estimaciones marcadas para sustituir por valores medidos.
 
 ---
 
-## Factual claims
+## No construir
 
-This project's credibility rests on its numbers being correct.
+Descartados con razonamiento en ARCHITECTURE.md sección 7. No reintroduzcas:
 
-- Monad network and performance figures: verify against
-  `https://docs.monad.xyz/ai/current-facts`, which explicitly supersedes older
-  blog posts and model memory.
-- OWASP category names and numbering: the web Top 10 is the **2025** edition and
-  the Smart Contract Top 10 is the **2026** edition. Category names changed
-  between editions; check before citing.
-- Gas and capacity figures: measure with `forge test --gas-report`. Do not
-  propagate an estimate as a measurement.
-- Cite a source for any external claim, and paraphrase rather than quote.
+Recogida de IP o geolocalización. Huella de dispositivo o navegador. Telemetría
+de clics, ratón o teclado. Puzzles de cliente por hash o memory-hard como
+defensa anti-bot. Inferencia de machine learning dentro de un contrato.
+Cualquier score secreto de riesgo o peligrosidad. Umbrales temporales absolutos
+como reglas. Sala de espera virtual como mecanismo de asignación. Almacenamiento
+de datos personales de ningún tipo, en ningún sitio.
 
-If you cannot verify a number, write that it is unverified rather than
-presenting a plausible value.
+Un puzzle de cliente es aceptable en exactamente un lugar: limitación de tasa en
+el edge para mantener disponibles el proxy RPC y el frontend durante un pico de
+demanda, etiquetado como limitador de tasa y nunca presentado como defensa
+anti-bot.
 
 ---
 
-## Commits and pull requests
+## Afirmaciones factuales
 
-- Conventional commit prefixes: `feat:`, `fix:`, `docs:`, `test:`, `refactor:`,
-  `chore:`. Scope by package, for example `feat(contracts): ...`.
-- Imperative mood, present tense, no trailing period.
-- Never commit to `main`. Branch, then open a pull request.
-- A pull request that touches detection logic must state which design invariant
-  governs the change and, if a new signal is added, whether it is relative or
-  absolute and why.
-- Never commit secrets, private keys or `.env` files. Deployment keys come from
-  the environment.
-- No emojis in code, comments, documentation or commit messages.
+La credibilidad de este proyecto depende de que sus números sean correctos.
+
+- Cifras de red y rendimiento de Monad: verifica contra
+  `https://docs.monad.xyz/ai/current-facts`, que explícitamente prevalece sobre
+  entradas de blog antiguas y sobre la memoria del modelo.
+- Nombres y numeración de categorías OWASP: el Top 10 web es la edición **2025**
+  y el Smart Contract Top 10 es la edición **2026**. Los nombres de categoría
+  cambiaron entre ediciones; compruébalo antes de citar.
+- Cifras de gas y capacidad: mide con `forge test --gas-report`. No propagues una
+  estimación como si fuera una medición.
+- Cita una fuente para toda afirmación externa, y parafrasea en lugar de citar
+  literalmente.
+
+Si no puedes verificar un número, escribe que no está verificado en lugar de
+presentar un valor plausible.
+
+---
+
+## Skill de frontend
+
+`.kiro/steering/ui-ux-pro-max/` contiene la skill UI UX Pro Max (licencia MIT),
+con datasets de diseño para Next.js, React, shadcn, Tailwind y otros stacks. Está
+versionada en el repositorio para que todo el equipo trabaje con la misma guía
+sin pasos de instalación.
+
+Se regenera con:
+
+```
+npx ui-ux-pro-max-cli init --ai kiro
+```
+
+Son unos 170 ficheros y 4,5 MB de datos de terceros. No edites su contenido a
+mano: se sobrescribe al regenerar. Si prefieres no versionarla, añade
+`.kiro/steering/ui-ux-pro-max/` al `.gitignore` y documenta el comando como paso
+de instalación obligatorio.
+
+---
+
+## Commits y pull requests
+
+- Prefijos de commit convencionales: `feat:`, `fix:`, `docs:`, `test:`,
+  `refactor:`, `chore:`. Ámbito por paquete, por ejemplo
+  `feat(contracts): ...`.
+- Modo imperativo, presente, sin punto final.
+- Nunca commitees a `main`. Crea una rama y abre un pull request.
+- Un pull request que toque lógica de detección debe indicar qué invariante de
+  diseño rige el cambio y, si añade una señal nueva, si es relativa o absoluta y
+  por qué.
+- Nunca commitees secretos, claves privadas ni ficheros `.env`. Las claves de
+  despliegue vienen del entorno.
+- Sin emojis en código, comentarios, documentación ni mensajes de commit.
