@@ -126,15 +126,17 @@ export async function runSwarm(options: SwarmOptions): Promise<void> {
   //    route per wallet; here it is simulated by varying the amount so the
   //    pattern stops being uniform.
   await fund(funderClient, publicClient, bots, options);
+  const gasPrice = maxBigInt(SWARM_GAS_PRICE, await publicClient.getGasPrice());
+  log(`gas del enjambre: ${gasPrice / 1_000_000_000n} gwei`);
 
   // 2. Enrolment. No race: the window is open and arriving early gains nothing.
-  await enroll(publicClient, chain, bots, deployment, params, options);
+  await enroll(publicClient, chain, bots, deployment, params, options, gasPrice);
 
   // 3. Qualification. The whole swarm answers each challenge in the same block.
-  await qualify(publicClient, chain, bots, deployment, params, options);
+  await qualify(publicClient, chain, bots, deployment, params, options, gasPrice);
 
   // 4. Collect whatever the draw assigned.
-  await collect(publicClient, chain, bots, deployment, params);
+  await collect(publicClient, chain, bots, deployment, params, options, gasPrice);
 }
 
 // --------------------------------------------------------------------- funding
@@ -213,6 +215,7 @@ async function enroll(
   deployment: Deployment,
   params: ProtocolParams,
   options: SwarmOptions,
+  gasPrice: bigint,
 ): Promise<void> {
   const bond = BigInt(params.enrollment.bondWei);
   log(`enrolando con un bono de ${bond} wei cada una`);
@@ -233,7 +236,7 @@ async function enroll(
         abi: enrollmentAbi,
         functionName: 'enroll',
         value: bond,
-        ...gasFor(options),
+        ...gasFor(options, gasPrice),
       });
       await publicClient.waitForTransactionReceipt({hash});
     }),
@@ -251,6 +254,7 @@ async function qualify(
   deployment: Deployment,
   params: ProtocolParams,
   options: SwarmOptions,
+  gasPrice: bigint,
 ): Promise<void> {
   // The orchestrator launches the swarm right after enrolment opens, so the
   // qualification window does not exist yet. Waiting here instead of failing is
@@ -295,7 +299,7 @@ async function qualify(
           abi: heartbeatAbi,
           functionName: 'respond',
           args: [round],
-          ...gasFor(options),
+          ...gasFor(options, gasPrice),
         });
         await publicClient.waitForTransactionReceipt({hash});
       }),
@@ -312,6 +316,8 @@ async function collect(
   bots: readonly HDAccount[],
   deployment: Deployment,
   params: ProtocolParams,
+  options: SwarmOptions,
+  gasPrice: bigint,
 ): Promise<void> {
   const open = await waitForLotteryRound(publicClient, deployment);
   if (!open) {
@@ -341,6 +347,7 @@ async function collect(
         address: deployment.lottery,
         abi: lotteryAbi,
         functionName: 'claimEntitlement',
+        ...gasFor(options, gasPrice),
       });
       await publicClient.waitForTransactionReceipt({hash: entitlement});
 
@@ -353,6 +360,7 @@ async function collect(
         functionName: 'claimTicket',
         args: [nullifier],
         value: BigInt(params.sale.priceWei),
+        ...gasFor(options, gasPrice),
       });
       await publicClient.waitForTransactionReceipt({hash: ticket});
       won += 1;
@@ -367,13 +375,16 @@ async function collect(
 
 // ----------------------------------------------------------------- utilities
 
-function gasFor(options: SwarmOptions): {gasPrice: bigint; gas: bigint} {
+function gasFor(options: SwarmOptions, minimumGasPrice: bigint): {gasPrice: bigint; gas: bigint} {
   if (!options.careful) {
     // Identical for every wallet: the shared-gas fingerprint.
-    return {gasPrice: SWARM_GAS_PRICE, gas: SWARM_GAS_LIMIT};
+    return {gasPrice: minimumGasPrice, gas: SWARM_GAS_LIMIT};
   }
-  const jitterGwei = BigInt(40 + Math.floor(Math.random() * 30)) * 1_000_000_000n;
-  return {gasPrice: jitterGwei, gas: SWARM_GAS_LIMIT + BigInt(Math.floor(Math.random() * 20_000))};
+  const jitter = BigInt(Math.floor(Math.random() * 30)) * 1_000_000_000n;
+  return {
+    gasPrice: minimumGasPrice + jitter,
+    gas: SWARM_GAS_LIMIT + BigInt(Math.floor(Math.random() * 20_000)),
+  };
 }
 
 /** Polls until the qualification window opens, up to a sane ceiling. */
