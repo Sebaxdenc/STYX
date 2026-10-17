@@ -125,8 +125,14 @@ automáticamente, la latencia mide el portátil y la conexión del usuario en lu
 de su reacción, y la señal de varianza desaparece. Pero el esfuerzo debe ser
 nulo: una notificación y un toque, sin nada que resolver. Ver sección 7.
 
-**Cohortes.** Los participantes se reparten en 20 cohortes asignadas por hash de
-dirección, de modo que el adversario no puede elegir ni concentrarse en una. Los
+**Cohortes.** A escala de demo (~200 participantes) `cohortCount` es **1**, y eso
+es mejor en los dos ejes: 200 respuestas en 10 segundos son 20 TPS, así que
+repartir la carga no hace falta, y con una sola cohorte **todos reciben el mismo
+bloque de reto**, sus latencias son directamente comparables y la señal de
+correlación sale más limpia.
+
+A escala de producción los participantes se reparten en 20 cohortes asignadas por
+hash de dirección, de modo que el adversario no puede elegir ni concentrarse en una. Los
 retos están sincronizados dentro de cada cohorte y desfasados entre cohortes, lo
 que suaviza la carga de la red y preserva la señal de correlación, que requiere
 que los miembros comparados actúen simultáneamente. La correlación se calcula
@@ -193,20 +199,45 @@ Queda confirmada en 48 horas."
 
 ### Fase 3: Reparto (`Lottery`)
 
-Al cerrar la ventana de cualificación, los ganadores se seleccionan entre todos
-los participantes cualificados usando aleatoriedad verificable, ponderada por
-`participationScore` con tope:
+**Por qué un umbral por participante y no una selección de ganadores.** El
+diseño obvio, ordenar a los participantes por un rango aleatorio y tomar los
+primeros `inventario`, **no se puede ejecutar en la cadena**: iterar sobre cien
+mil participantes no cabe en ningún bloque. Calcular el conjunto fuera y
+comprometer una raíz funcionaría, pero demostrar igualdad de conjuntos en una
+impugnación es difícil, y cualquier recurso de "gana quien reclame primero"
+reintroduce exactamente la carrera de latencia que el proyecto existe para
+eliminar.
+
+Así que el resultado de cada participante es **independiente** y queda fijado por
+la semilla:
 
 ```
-peso = min(participationScore, TOPE)
+peso = min(participationScore, TOPE) x multiplicador_de_cluster
+u    = keccak256(semilla, ronda, participante)
+gana = u < limite(peso)
 ```
 
-El tope es deliberado. La participación debe contar, pero el sorteo no debe
+Reclamar es **recoger, no competir**. Ser rápido no aporta nada, ser lento no
+quita nada, y cualquiera puede recomputar el resultado de cualquier participante
+a partir de datos públicos.
+
+El tope es deliberado: la participación debe contar, pero el sorteo no debe
 convertirse en una subasta que gane quien comande más máquinas.
 
-Aquí no hay carreras de transacciones. La selección ocurre dentro del contrato,
-así que la latencia no confiere ventaja, no hay orden que explotar y no hay nada
-que front-runear.
+**Por qué varias rondas.** Al ser sorteos independientes, el número de ganadores
+es una variable binomial y una sola ronda no puede acertar el inventario exacto.
+Cada ronda apunta a una fracción conservadora de lo que queda (90 por ciento) y
+la siguiente absorbe el faltante. **La sub-asignación es la dirección segura**:
+solo implica otra ronda. La sobre-asignación no lo es, así que además está
+bloqueada por un tope duro.
+
+La tasa de cada ronda se **deriva del estado de la cadena** mediante código
+inmutable. No hay ninguna entrada de administración en el sorteo, por el
+invariante 7, y la tasa usada en cada ronda se guarda para que cualquier ronda
+pasada siga siendo recomputable.
+
+La semilla se ancla al hash de un bloque futuro, con `requestSeed` llamable por
+cualquiera, de modo que nadie puede conocerla mientras decide si participar.
 
 `Lottery` es inmutable una vez abierta una venta.
 
@@ -755,6 +786,17 @@ Documentados para que no se reintroduzcan.
 6. Una persona puede entregar documento y clave y simplemente no asistir. Es
    imposible de prevenir y es el mismo riesgo residual que tienen hoy las
    entradas en papel con control de identidad.
+7. **`ClusterRegistry.resolver` es el único componente de confianza del sistema
+   y choca con el invariante 6.** Adjudicar una afirmación estadística necesita
+   un árbitro; es la razón por la que existen protocolos como Kleros. La
+   mitigación actual es parcial: el rol es inmutable, no puede comprometer
+   hallazgos él mismo, sus decisiones son públicas y están respaldadas por bonos,
+   y marcar wallets y pedir penalizaciones es permissionless. En producción debe
+   sustituirse por un protocolo de arbitraje descentralizado. Se declara aquí en
+   lugar de esconderse.
+8. La escala de demo (~200 participantes, una cohorte) no ejercita el camino de
+   cohortes ni la vía agregada de relayers. Las cifras de capacidad de la sección
+   4 son el argumento de diseño para producción, no una medición de la demo.
 
 ---
 

@@ -29,12 +29,19 @@
     "minResponsesToQualify": 6,
     "interactionMode": "tap",
     "_interactionModeComment": "Un toque, no un puzzle. La interaccion humana es obligatoria: el modo automatico destruye la senal de varianza. Ver ARCHITECTURE.md seccion 7.",
-    "cohortCount": 20,
-    "_cohortCountComment": "Asignacion por hash de direccion para que el adversario no pueda elegir cohorte. Suaviza la carga y mantiene los retos sincronizados dentro de cada cohorte. 1 desactiva las cohortes."
+    "cohortCount": 1,
+    "_cohortCountComment": "ESCALA DE DEMO (~200 participantes): 1 cohorte. Las cohortes existen para repartir la carga cuando 100.000 personas responden al mismo reto en 10 s, que son 10.000 TPS y el 112% de la capacidad de la red. Con 200 participantes son 20 TPS, asi que no hacen falta, y una sola cohorte es ADEMAS mejor para detectar: todos reciben el mismo bloque de reto, sus latencias son directamente comparables y la senal de correlacion sale mas limpia. Para produccion a 100.000, subir a 20. La asignacion es por hash de direccion para que el adversario no pueda elegir cohorte. Ver ARCHITECTURE.md seccion 4."
+  },
+
+  "sale": {
+    "_comment": "ESCALA DE DEMO: 40 entradas para ~200 participantes, la misma proporcion que 10.000 para 50.000.",
+    "inventory": 40
   },
 
   "lottery": {
     "participationCap": 8,
+    "roundLengthBlocks": 200,
+    "_roundLengthBlocksComment": "200 bloques son ~60 s a 300 ms. Tiempo de sobra para reclamar sin carrera: reclamar es recoger, no competir.",
     "_participationCapComment": "min(participationScore, cap). Con 10 retos permite fallar 2 sin perder peso maximo.",
     "immutableOnceOpen": true
   },
@@ -49,7 +56,8 @@
 
   "detection": {
     "correlationThreshold": 0.8,
-    "minClusterSize": 50,
+    "minClusterSize": 10,
+    "_minClusterSizeComment": "ESCALA DE DEMO (~200 participantes): 10. Un grupo de 10 wallets mutuamente correlacionadas y con senales exactas compartidas ya es estadisticamente abrumador a esta escala. Para produccion a 100.000, subir a 50 para reducir falsos positivos.",
     "clusteringAlgorithm": "louvain",
     "_clusteringAlgorithmComment": "Nunca componentes conexas: con aristas espurias el grafo se fusiona por percolacion. Alternativa valida: clustering espectral.",
     "requireSignalConjunction": true,

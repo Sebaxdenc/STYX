@@ -163,8 +163,14 @@ poder falsificar, y el autoenvío debe seguir disponible.
 
 **7. `Lottery` es inmutable una vez abierta una venta.**
 Sin proxy, sin ruta de actualización, sin función de administración que pueda
-influir en un sorteo. Las funciones privilegiadas en otros contratos van detrás
-de un timelock.
+influir en un sorteo. La tasa de cada ronda se **deriva** del estado de la cadena
+mediante código inmutable: no añadas ningún parámetro de administración al
+sorteo. Las funciones privilegiadas en otros contratos van detrás de un timelock.
+
+`ClusterRegistry.resolver` es la única excepción de confianza del sistema y está
+declarada como limitación 7 en ARCHITECTURE.md. No amplíes sus poderes: no puede
+comprometer hallazgos, y marcar wallets y pedir penalizaciones debe seguir siendo
+permissionless.
 
 **8. Asume que el adversario ha leído este repositorio.**
 La seguridad no debe depender de que ningún detalle sea secreto. Si un mecanismo
