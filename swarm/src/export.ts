@@ -39,13 +39,7 @@ export async function exportDataset(options: ExportOptions): Promise<void> {
   const deployment = loadDeployment(options.deploymentPath);
   const client = createPublicClient({chain, transport: http()}) as PublicClient;
 
-  const logs = await client.getContractEvents({
-    address: deployment.heartbeatRegistry,
-    abi: heartbeatAbi,
-    eventName: 'Heartbeat',
-    fromBlock: options.fromBlock,
-    toBlock: 'latest',
-  });
+  const logs = await fetchHeartbeatsChunked(client, deployment.heartbeatRegistry, options.fromBlock);
   log(`${logs.length} latidos encontrados desde el bloque ${options.fromBlock}`);
   if (logs.length === 0) {
     throw new Error('sin latidos: comprueba fromBlock y que la ventana haya corrido');
@@ -53,11 +47,14 @@ export async function exportDataset(options: ExportOptions): Promise<void> {
 
   // Transaction level signals: gas settings and calldata come from the tx itself,
   // not from the event.
-  const txCache = new Map<string, {gasPrice: bigint; gas: bigint; input: string}>();
+  const txCache = new Map<string, {gasPrice: bigint; gas: bigint; input: `0x${string}`}>();
   for (const entry of logs) {
-    if (txCache.has(entry.transactionHash)) continue;
-    const tx = await client.getTransaction({hash: entry.transactionHash});
-    txCache.set(entry.transactionHash, {
+    // Only pending logs carry a null hash, and the ranges queried here are
+    // already mined, but the guard keeps the types honest.
+    const hash = entry.transactionHash;
+    if (hash === null || txCache.has(hash)) continue;
+    const tx = await client.getTransaction({hash});
+    txCache.set(hash, {
       gasPrice: tx.gasPrice ?? tx.maxFeePerGas ?? 0n,
       gas: tx.gas,
       input: tx.input,
@@ -69,21 +66,21 @@ export async function exportDataset(options: ExportOptions): Promise<void> {
 
   const rows: HeartbeatRow[] = [];
   for (const entry of logs) {
-    const tx = txCache.get(entry.transactionHash);
-    const args = entry.args;
-    if (!tx || args.participant === undefined) continue;
+    const hash = entry.transactionHash;
+    const tx = hash === null ? undefined : txCache.get(hash);
+    const {participant, cohort, round, challengeBlock, responseBlock} = entry.args;
+    if (!tx || participant === undefined) continue;
 
-    const wallet = args.participant as Address;
     rows.push({
-      wallet,
-      cohort: Number(args.cohort ?? 0),
-      round: Number(args.round ?? 0),
-      challenge_block: Number(args.challengeBlock ?? 0n),
-      response_block: Number(args.responseBlock ?? 0n),
+      wallet: participant,
+      cohort: Number(cohort ?? 0),
+      round: Number(round ?? 0),
+      challenge_block: Number(challengeBlock ?? 0n),
+      response_block: Number(responseBlock ?? 0n),
       gas_price: Number(tx.gasPrice),
       gas_limit: Number(tx.gas),
-      calldata_hash: keccak256(tx.input as `0x${string}`),
-      funder: funders.get(wallet.toLowerCase()) ?? '',
+      calldata_hash: keccak256(tx.input),
+      funder: funders.get(participant.toLowerCase()) ?? '',
     });
   }
 
@@ -96,6 +93,48 @@ export async function exportDataset(options: ExportOptions): Promise<void> {
   log(`escrito en ${options.out}`);
 }
 
+/**
+ * Monad caps `eth_getLogs` at a 100-block range and answers a wider one with
+ * `-32614`. At 300 ms per block that is only 30 seconds of history, so even a
+ * single qualification window (150 blocks) has to be fetched in chunks.
+ */
+const LOG_RANGE_LIMIT = 100n;
+
+/** Single typed range query. Keeps the ABI inference that chunking would erase. */
+async function getHeartbeatRange(
+  client: PublicClient,
+  address: Address,
+  fromBlock: bigint,
+  toBlock: bigint,
+) {
+  return client.getContractEvents({
+    address,
+    abi: heartbeatAbi,
+    eventName: 'Heartbeat',
+    fromBlock,
+    toBlock,
+  });
+}
+
+type HeartbeatLogs = Awaited<ReturnType<typeof getHeartbeatRange>>;
+
+async function fetchHeartbeatsChunked(
+  client: PublicClient,
+  address: Address,
+  fromBlock: bigint,
+): Promise<HeartbeatLogs> {
+  const latest = await client.getBlockNumber();
+  const collected: HeartbeatLogs = [];
+
+  for (let start = fromBlock; start <= latest; start += LOG_RANGE_LIMIT) {
+    const candidate = start + LOG_RANGE_LIMIT - 1n;
+    const end = candidate > latest ? latest : candidate;
+    collected.push(...(await getHeartbeatRange(client, address, start, end)));
+  }
+
+  return collected;
+}
+
 /** Reconstructs who funded each participant by scanning native transfers. */
 async function scanFunding(
   client: PublicClient,
@@ -106,18 +145,31 @@ async function scanFunding(
   const funders = new Map<string, string>();
   const latest = await client.getBlockNumber();
 
-  // Funding happens before enrolment, so look a little further back.
-  const start = fromBlock > 400n ? fromBlock - 400n : 0n;
+  // Funding happens before enrolment, so look a little further back. Kept modest
+  // on purpose: each block is one `getBlock` with full transactions, and the
+  // public RPC allows only 15 to 25 requests per second.
+  const start = fromBlock > 300n ? fromBlock - 300n : 0n;
   log(`buscando linaje de fondeo en los bloques ${start}..${latest}`);
 
-  for (let n = start; n <= latest; n++) {
-    const block = await client.getBlock({blockNumber: n, includeTransactions: true});
-    for (const tx of block.transactions) {
-      if (typeof tx === 'string') continue;
-      if (tx.to === null || tx.value === 0n) continue;
-      const to = tx.to.toLowerCase();
-      if (!wanted.has(to) || funders.has(to)) continue;
-      funders.set(to, tx.from.toLowerCase());
+  // Small batches rather than one request at a time, and well under the batch
+  // limit of the public endpoints.
+  const BATCH = 8;
+  for (let n = start; n <= latest; n += BigInt(BATCH)) {
+    const numbers: bigint[] = [];
+    for (let k = 0; k < BATCH && n + BigInt(k) <= latest; k++) numbers.push(n + BigInt(k));
+
+    const blocks = await Promise.all(
+      numbers.map((blockNumber) => client.getBlock({blockNumber, includeTransactions: true})),
+    );
+
+    for (const block of blocks) {
+      for (const tx of block.transactions) {
+        if (typeof tx === 'string') continue;
+        if (tx.to === null || tx.value === 0n) continue;
+        const to = tx.to.toLowerCase();
+        if (!wanted.has(to) || funders.has(to)) continue;
+        funders.set(to, tx.from.toLowerCase());
+      }
     }
   }
 

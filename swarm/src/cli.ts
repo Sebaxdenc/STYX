@@ -1,17 +1,23 @@
 import {parseEther} from 'viem';
 
 import {exportDataset} from './export.js';
-import {runSwarm} from './swarm.js';
+import {DEFAULT_FUND_MON, prefundSwarm, runSwarm} from './swarm.js';
 
 const USAGE = `
 STYX swarm: simulador de adversario y exportador de datasets.
+
+  npm run swarm -- prefund [--size N] [--fund MON]
+      Fondea las wallets y para. HAZLO ANTES DEL PITCH: el fondeo es
+      secuencial y 40 transacciones no caben en los 25 s de enrolamiento.
 
   npm run swarm -- attack [opciones]
       --size N          wallets del enjambre (por defecto 40)
       --jitter N        bloques de retardo aleatorio (por defecto 0)
       --careful         aleatoriza tambien las huellas. ESCAPA a la deteccion,
                         incluido a proposito para demostrar el limite honesto
-      --fund ETH        fondeo por wallet (por defecto 0.05)
+      --fund MON        fondeo por wallet (por defecto 0.2). No lo bajes:
+                        el reserve balance de Monad limita las rafagas segun
+                        el saldo, y cada wallet hace ~8 transacciones
 
   npm run swarm -- export --from BLOQUE [--out fichero]
       Lee la cadena y escribe el dataset que consume el detector
@@ -40,7 +46,18 @@ async function main(): Promise<number> {
       size: Number(value(args, 'size') ?? 40),
       jitterBlocks: Number(value(args, 'jitter') ?? 0),
       careful: flag(args, 'careful'),
-      fundWei: parseEther(value(args, 'fund') ?? '0.05'),
+      fundWei: parseEther(value(args, 'fund') ?? DEFAULT_FUND_MON),
+      deploymentPath: value(args, 'deployment'),
+    });
+    return 0;
+  }
+
+  if (command === 'prefund') {
+    await prefundSwarm({
+      size: Number(value(args, 'size') ?? 40),
+      jitterBlocks: 0,
+      careful: flag(args, 'careful'),
+      fundWei: parseEther(value(args, 'fund') ?? DEFAULT_FUND_MON),
       deploymentPath: value(args, 'deployment'),
     });
     return 0;

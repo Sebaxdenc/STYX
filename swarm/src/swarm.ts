@@ -56,6 +56,49 @@ const SWARM_MNEMONIC =
 const SWARM_GAS_PRICE = 55_000_000_000n;
 const SWARM_GAS_LIMIT = 120_000n;
 
+/**
+ * Monad's reserve balance makes under-funding bite twice.
+ *
+ * At consensus time an account's budget for the gas of ALL its in-flight
+ * transactions is `min(10 MON, balance)`, so a thin balance limits bursts and
+ * not just the total spend. And each wallet here runs roughly eight
+ * transactions: enrol, five heartbeats, claim entitlement, claim ticket. At
+ * 55 gwei and a 120k limit that is about 0.0066 MON each, plus the bond.
+ *
+ *     8 x 0.0066 + bond  =~ 0.06 MON of hard floor
+ *
+ * 0.05 MON, the first default used here, therefore ran out mid-run. Funding with
+ * room is the documented practice.
+ */
+export const DEFAULT_FUND_MON = '0.2';
+
+/**
+ * Funds the swarm wallets and stops.
+ *
+ * Kept as its own step because funding is sequential, one transaction per wallet
+ * from a single funder, and forty of them do not fit inside the 25 second
+ * enrolment window of the demo. Run this before the pitch; `attack` then skips
+ * any wallet that already has a balance and starts immediately.
+ */
+export async function prefundSwarm(options: SwarmOptions): Promise<void> {
+  const params = loadParams();
+  const chain = monadTestnet(params);
+  const publicClient = createPublicClient({chain, transport: http()}) as PublicClient;
+  const funder = mnemonicToAccount(requireEnv('SWARM_FUNDER_MNEMONIC'));
+  const funderClient = createWalletClient({account: funder, chain, transport: http()});
+
+  const bots = Array.from({length: options.size}, (_, i) =>
+    mnemonicToAccount(SWARM_MNEMONIC, {addressIndex: i + 1}),
+  );
+
+  log(`prefondeo de ${bots.length} wallets desde ${funder.address}`);
+  await fund(funderClient, publicClient, bots, options);
+
+  let total = 0n;
+  for (const bot of bots) total += await publicClient.getBalance({address: bot.address});
+  log(`saldo total del enjambre: ${total} wei`);
+}
+
 export async function runSwarm(options: SwarmOptions): Promise<void> {
   const params = loadParams();
   const chain = monadTestnet(params);
