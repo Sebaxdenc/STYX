@@ -298,15 +298,32 @@ cd web && npm run build && npm start     # http://localhost:3000/enjambre
 
 1. **Root Directory**: `web`
 2. **Framework**: Next.js (lo detecta solo)
-3. **Variables de entorno**: copia los nombres de `web/.env.example` y pon las
-   cinco direcciones de `deployment.json`.
+3. **Variables de entorno.** Siete en total: cinco obligatorias y dos
+   recomendables. Todas con **Environment** marcado en `Production`, `Preview` y
+   `Development`.
 
-   Esto hay que hacerlo a mano. En local las sincroniza
+   | Variable | ¿Obligatoria? | Valor |
+   |---|---|---|
+   | `NEXT_PUBLIC_ENROLLMENT_ADDRESS` | sí | `enrollment` de `deployment.json` |
+   | `NEXT_PUBLIC_HEARTBEAT_ADDRESS` | sí | `heartbeatRegistry` |
+   | `NEXT_PUBLIC_LOTTERY_ADDRESS` | sí | `lottery` |
+   | `NEXT_PUBLIC_TICKET_REGISTRY_ADDRESS` | sí | `ticketRegistry` |
+   | `NEXT_PUBLIC_CLUSTER_REGISTRY_ADDRESS` | sí | `clusterRegistry` |
+   | `NEXT_PUBLIC_MONAD_RPC_URL` | no, pero ponla | `https://monad-testnet.g.alchemy.com/v2/TU_CLAVE` |
+   | `NEXT_PUBLIC_MONAD_WS_URL` | no | `wss://monad-testnet.g.alchemy.com/v2/TU_CLAVE` |
+
+   Las cinco direcciones hay que ponerlas **a mano**. En local las sincroniza
    `scripts/sync-deployment.mjs` desde `deployment.json`, pero ese fichero está
    en `.gitignore` a propósito, así que en Vercel no llega.
 
-4. **`NEXT_PUBLIC_MONAD_RPC_URL`**: pon el RPC dedicado. Con el público, unas
-   decenas de móviles escaneando el QR a la vez agotan el límite.
+   **Ninguna es secreta.** El prefijo `NEXT_PUBLIC_` significa que van dentro del
+   JavaScript que llega al navegador; cualquiera puede leerlas. Restringe la
+   clave del RPC **por dominio** en el panel del proveedor y no cuentes con que
+   quede oculta.
+
+   Si falta el RPC dedicado, la web cae al público y funciona, pero unas decenas
+   de móviles escaneando el QR a la vez agotan el límite. Si falta el WebSocket,
+   el reloj de bloques extrapola y resincroniza cada 4 segundos, lo cual basta.
 
 > Si olvidas las direcciones, la interfaz no se rompe: `isDeployed()` detecta que
 > faltan y lo muestra como estado de configuración. Pero nadie podrá enrolarse.
