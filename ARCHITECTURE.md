@@ -86,24 +86,110 @@ se abandonan, lo que impide enrolarse a escala y desaparecer.
 
 ### Fase 2: Ventana de cualificación (`HeartbeatRegistry`)
 
-Una ventana de unos veinte minutos que contiene entre seis y diez retos emitidos
-en momentos impredecibles.
+Parámetros canónicos en `protocol-params.json`. Valores vigentes:
+
+| Parámetro | Valor | Motivo |
+|---|---|---|
+| Duración de la ventana | 5 minutos (1.000 bloques) | Presencia exigible sin ser abusiva |
+| Número de retos | 10 | Lo que importa estadísticamente es el número de muestras, no la duración |
+| Intervalo medio entre retos | ~30 s (100 bloques), aleatorizado | Impredecible: impide programar un cron y dormir el resto |
+| Ventana de respuesta | ~10 s (33 bloques) | Ancha a propósito, ver abajo |
+| Respuestas mínimas para cualificar | 6 de 10 | Tolera fallos de red y notificaciones perdidas |
+| Interacción | un toque, no un puzzle | La interacción humana es obligatoria |
 
 ```
 En el bloque N:   reto = keccak256(blockhash(N), eventId, ronda)
-Plazo de respuesta: bloque N + k   (k elegido para una ventana de pocos segundos)
+Plazo de respuesta: bloque N + 33   (~10 s)
 ```
 
 El reto deriva del hash de un bloque reciente, por lo que no se puede
 precomputar. Una respuesta es una transacción firmada y entregada a tiempo. Cada
-respuesta válida incrementa el `participationScore` del participante.
+respuesta válida incrementa el `participationScore`.
+
+El participante conoce la ventana (de 19:00 a 19:05) pero **no los instantes
+exactos de los retos dentro de ella**. Si fueran horas fijas, el script del
+adversario programaría un cron para esos momentos y dormiría el resto, a coste
+cero. Al ser impredecibles, su infraestructura debe estar provisionada y atenta
+durante los cinco minutos completos.
+
+**Por qué la ventana de respuesta es ancha.** Una ventana de 3 segundos
+**censuraría** a los humanos que tardan más, perdiendo la cola de la
+distribución, que es precisamente la señal que se quiere medir. Diez segundos
+capturan la distribución humana completa. Una ventana estrecha solo tenía
+sentido para el argumento anti-granja de CAPTCHA, que se degradó al pasar la
+tesis del proyecto al análisis de coordinación.
+
+**Por qué un toque y no un puzzle.** La interacción humana es un requisito, no
+una preferencia de experiencia de usuario: si el cliente responde
+automáticamente, la latencia mide el portátil y la conexión del usuario en lugar
+de su reacción, y la señal de varianza desaparece. Pero el esfuerzo debe ser
+nulo: una notificación y un toque, sin nada que resolver. Ver sección 7.
+
+**Cohortes.** Los participantes se reparten en 20 cohortes asignadas por hash de
+dirección, de modo que el adversario no puede elegir ni concentrarse en una. Los
+retos están sincronizados dentro de cada cohorte y desfasados entre cohortes, lo
+que suaviza la carga de la red y preserva la señal de correlación, que requiere
+que los miembros comparados actúen simultáneamente. La correlación se calcula
+dentro de cada cohorte. Un enjambre de 10.000 wallets queda repartido a unas 500
+por cohorte, y 500 wallets mutuamente correlacionadas sigue siendo una señal
+abrumadora.
 
 El latido es deliberadamente barato de verificar: una firma ECDSA y una
 comparación de número de bloque. Los puzzles de cliente costosos se evaluaron y
 se descartaron, ver sección 7.
 
-Esta fase produce las series temporales por wallet que analiza la sección 3. **Ese
-es su propósito principal.** El coste que impone es secundario y modesto.
+Esta fase produce las series temporales por wallet que analiza la sección 3.
+**Ese es su propósito principal.** El coste que impone es secundario y modesto.
+
+### Etapas de propiedad y línea de tiempo
+
+Pregunta frecuente: ¿en qué momento exacto una entrada es de alguien? La
+propiedad es **escalonada**, y la etapa provisional es deliberada.
+
+```
+LUNES 12:00      Se abre el enrolamiento (48 h, sin carrera)
+MIERCOLES 12:00  Se cierra. 110.000 enrolados para 10.000 entradas
+JUEVES 19:00     Se abre la ventana de cualificacion
+                   19:00:17  reto 1   -> responder antes de 19:00:27
+                   19:00:54  reto 2
+                   19:01:31  reto 3   (10 retos, instantes impredecibles)
+                      ...
+JUEVES 19:05     Se cierra. El sorteo corre en segundos
+JUEVES 19:05     -> ventana de impugnacion (48 h) + reclamo en paralelo
+SABADO 19:05     Las entradas pasan a definitivas
+15 DE MARZO      Puerta del recinto: redencion
+```
+
+| Etapa | Momento | Qué se posee |
+|---|---|---|
+| 1. Enrolado | Lunes | Nada. Solo un bono depositado |
+| 2. Cualificado | Jueves 19:05 | Nada. Un `participationScore` |
+| 3. Seleccionado | Jueves 19:05 | Un **derecho a reclamar**, no una entrada |
+| 4. Reclamado | Al pagar | El NFT, pero **provisional** |
+| 5. Definitivo | Al cerrar la impugnación | La entrada, firme |
+| 6. Redimido | En la puerta | Acceso consumido |
+
+El salto crítico es de 3 a 5. En el sorteo el contrato **no acuña nada**:
+registra que esas direcciones tienen derecho a una entrada. El NFT emitido en la
+etapa 4 es provisional mientras la ventana de impugnación esté abierta, con las
+transferencias bloqueadas.
+
+**Esto es lo que hace ejecutable el análisis retrospectivo.** En tiempo real hay
+segundos de datos y no se detecta nada; en retrospectiva está el patrón completo.
+Si la propiedad fuese definitiva en el instante del sorteo, el hallazgo de un
+clúster sería un informe sin consecuencias. Al ser provisional, las entradas del
+enjambre se revocan, su bono sufre slashing y esas entradas pasan a un segundo
+sorteo entre quienes no ganaron.
+
+La revocación aquí funciona de verdad, a diferencia de una devolución de cargo:
+la entrada es un derecho que se valida en la puerta, así que si el contrato la
+invalidó antes del evento, simplemente no sirve. Una revocación errónea reembolsa
+el precio íntegro y mantiene abierta la vía de apelación.
+
+Coste honesto: la provisionalidad es mala experiencia de usuario. El dial es la
+duración de la ventana de impugnación, que intercambia comodidad por calidad de
+detección. El mensaje al usuario debe ser explícito: "Has obtenido una entrada.
+Queda confirmada en 48 horas."
 
 ### Fase 3: Reparto (`Lottery`)
 
@@ -286,7 +372,7 @@ Separación esperada:
 
 Nota técnica: una wallet con varianza cero hace indefinida la correlación de
 Pearson. Esos casos se marcan directamente por el test de varianza, ya que una
-varianza nula a lo largo de ocho rondas es por sí misma anómala.
+varianza nula a lo largo de diez rondas es por sí misma anómala.
 
 ### Robustez frente al jitter
 
@@ -395,24 +481,42 @@ calldata, una escritura de almacenamiento, un evento y la verificación):
 ```
 Por bloque:   150M / 45k            = ~3.300 latidos
 Por segundo:  3.300 / 0,3 s         = ~11.000 latidos/s
-
-Carga, 100k participantes a un latido cada 12 s:
-              100.000 / 12          = ~8.300 latidos/s
-Gas:          8.300 x 45k           = ~375M gas/s   = ~75% de la capacidad
 ```
 
-El 75 por ciento del caudal de gas de la red es viable pero poco considerado y no
-deja margen, así que **la vía predeterminada es agregada**. Los participantes
-firman atestaciones EIP-712 y relayers sin permisos envían lotes, con las firmas
-verificadas en la cadena:
+**El riesgo aquí es el pico, no la media.** Si los 100.000 participantes
+responden al mismo reto en la misma ventana, el pico es:
+
+```
+Sin cohortes, ventana de respuesta de 10 s:
+              100.000 / 10 s        = 10.000 TPS de pico
+Gas:          10.000 x 45k          = 450M gas/s   = ~90% de la capacidad
+```
+
+Noventa por ciento sin ningún margen, y con una ventana de 3 segundos en lugar
+de 10 serían ~33.000 TPS, **más del triple de la capacidad de la red**. Este fue
+el motivo real para ensanchar la ventana de respuesta y para introducir las
+cohortes.
+
+Con 20 cohortes desfasadas la carga se reparte y pasa a ser un flujo continuo en
+lugar de ráfagas:
+
+```
+Total:        100.000 x 10 respuestas = 1.000.000 tx en 300 s
+Sostenido:    1.000.000 / 300         = ~3.300 TPS
+Gas:          3.300 x 45k             = ~150M gas/s  = ~30% de la capacidad
+Pico por cohorte: 5.000 / 10 s        = 500 TPS
+```
+
+Con la **vía agregada**, en la que los participantes firman atestaciones EIP-712
+y relayers sin permisos envían lotes verificados en la cadena:
 
 ```
 Por latido, agregado (ecrecover 3k + almacenamiento 5k + calldata, base amortizada):
               ~9.600 gas
-Gas:          8.300 x 9.600         = ~80M gas/s    = ~16% de la capacidad
+Gas:          3.300 x 9.600         = ~32M gas/s    = ~6% de la capacidad
 ```
 
-Un relayer puede censurar pero no puede falsificar, y la vía de autoenvío directo
+Un relayer puede censurar pero no falsificar, y la vía de autoenvío directo
 permanece siempre disponible como salvaguarda frente a la censura.
 
 ### Ejecución paralela y disposición del estado
@@ -520,6 +624,7 @@ Documentados para que no se reintroduzcan.
 |---|---|
 | Detección por IP | La EVM nunca ve la IP. Los proxies residenciales evaden la reputación en la gran mayoría de sesiones. Almacenar IPs en la cadena es una infracción permanente de protección de datos. |
 | Huella de dispositivo | Se recoge en el cliente, por tanto es autodeclarada y falsificable. Los navegadores antidetección son un producto comercial vendido para derrotar exactamente esto. Las huellas son datos personales. |
+| Reto automático en segundo plano, sin interacción humana | Se evaluó y se descartó. Si el cliente responde solo, la latencia mide el portátil y la conexión del usuario en lugar de su reacción, y **la señal de varianza desaparece**: los clientes honestos responden rápido y regular, igual que un bot. Solo sobreviviría la señal de correlación. Introduce además un falso positivo grave: usuarios honestos que comparten un mismo RPC público comparten sus picos de carga y correlacionan entre sí, produciendo un clúster falso. La interacción humana es un requisito del mecanismo, no una preferencia de experiencia de usuario. Lo que se elimina es el **esfuerzo**, no la presencia: un toque, nunca un puzzle. |
 | Telemetría de clics o ratón | Los clics no existen en la cadena. Cualquier reporte del cliente sobre interacción humana es falsificable; un contrato no puede verificar que una persona tocó una pantalla. |
 | Proof of work por hash | La asimetría va en sentido contrario. Una GPU es cuatro o cinco órdenes de magnitud más rápida que un móvil de gama baja, así que una dificultad calibrada para costar tres segundos al móvil le cuesta al adversario una fracción de milisegundo. Además es regresivo, penaliza a quien tiene hardware más barato, lo que es inaceptable en un producto de equidad. |
 | Puzzles memory-hard, clase Argon2 | Las funciones memory-hard son deliberadamente simétricas, así que verificar cuesta lo mismo que resolver. 256 MB no se pueden verificar en la EVM a ningún coste de gas razonable. Una construcción asimétrica tipo Equihash sí sería verificable, pero el coste que impone es de decenas de dólares frente a un premio muy grande, y el gasto de implementación no se justifica. |

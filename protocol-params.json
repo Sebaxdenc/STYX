@@ -1,0 +1,59 @@
+{
+  "_comment": "Fuente unica de verdad de los parametros del protocolo. La leen los contratos (vm.parseJson en los scripts de despliegue), el indexer, el detector y la web. No dupliques estos valores en codigo: importalos desde aqui. La justificacion de cada valor esta en ARCHITECTURE.md.",
+
+  "version": "0.1.0",
+
+  "network": {
+    "mainnet": { "chainId": 143, "rpc": "https://rpc.monad.xyz" },
+    "testnet": { "chainId": 10143, "rpc": "https://testnet-rpc.monad.xyz" },
+    "blockTimeMs": 300,
+    "finalityMs": 600,
+    "blockGasLimit": 150000000
+  },
+
+  "enrollment": {
+    "_comment": "Ventana amplia y sin carrera. Limites de fase en timestamp, no en bloques.",
+    "windowSeconds": 172800,
+    "bondWei": "20000000000000000000",
+    "abandonmentForfeitBps": 2500
+  },
+
+  "qualification": {
+    "_comment": "Ventana corta y con muchas muestras. Lo que importa estadisticamente es el numero de rondas, no la duracion.",
+    "windowSeconds": 300,
+    "windowBlocks": 1000,
+    "challengeCount": 10,
+    "meanChallengeIntervalBlocks": 100,
+    "responseWindowBlocks": 33,
+    "_responseWindowComment": "33 bloques = ~10 s. Ancha a proposito: un tope de 3 s censuraria a los humanos que tardan mas y perderia la cola de la distribucion, que es justo la senal que se quiere medir.",
+    "minResponsesToQualify": 6,
+    "interactionMode": "tap",
+    "_interactionModeComment": "Un toque, no un puzzle. La interaccion humana es obligatoria: el modo automatico destruye la senal de varianza. Ver ARCHITECTURE.md seccion 7.",
+    "cohortCount": 20,
+    "_cohortCountComment": "Asignacion por hash de direccion para que el adversario no pueda elegir cohorte. Suaviza la carga y mantiene los retos sincronizados dentro de cada cohorte. 1 desactiva las cohortes."
+  },
+
+  "lottery": {
+    "participationCap": 8,
+    "_participationCapComment": "min(participationScore, cap). Con 10 retos permite fallar 2 sin perder peso maximo.",
+    "immutableOnceOpen": true
+  },
+
+  "dispute": {
+    "_comment": "La entrada es provisional mientras esta ventana esta abierta. Es lo que hace ejecutable la revocacion del enjambre.",
+    "windowSeconds": 172800,
+    "challengerBondWei": "50000000000000000000",
+    "transfersLockedDuringWindow": true,
+    "revocationRefundsFullPrice": true
+  },
+
+  "detection": {
+    "correlationThreshold": 0.8,
+    "minClusterSize": 50,
+    "clusteringAlgorithm": "louvain",
+    "_clusteringAlgorithmComment": "Nunca componentes conexas: con aristas espurias el grafo se fusiona por percolacion. Alternativa valida: clustering espectral.",
+    "requireSignalConjunction": true,
+    "_conjunctionComment": "La correlacion sola produce falsos positivos cuando usuarios honestos comparten RPC. Exigir correlacion mas al menos otra senal de coincidencia exacta (financiador, parametros de gas, hash de calldata).",
+    "randomSeed": 42
+  }
+}

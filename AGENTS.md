@@ -111,6 +111,13 @@ persona lo pida explícitamente.
 No son preferencias de estilo. Violar una es una regresión de diseño, y un pull
 request que lo haga debe rechazarse aunque los tests pasen.
 
+**0. `protocol-params.json` es la fuente única de verdad de los parámetros.**
+Duración de ventanas, número de retos, umbrales de detección, bonos y cohortes
+se leen de ahí: los contratos vía `vm.parseJson` en los scripts de despliegue, y
+el indexer, el detector y la web importándolo. **No dupliques esos valores como
+literales en el código.** Si cambias un parámetro, cámbialo ahí y actualiza su
+justificación en ARCHITECTURE.md.
+
 **1. Nunca datos personales en la cadena ni en IPFS. Jamás.**
 Solo compromisos, nullifiers y direcciones pseudónimas. Sin direcciones IP, sin
 huellas de dispositivo, sin datos documentales. Cifrar no lo hace aceptable: un
@@ -163,6 +170,19 @@ interfaz sin una justificación técnica concreta ligada a un control específic
 Las secciones de limitaciones y de enfoques descartados existen para evitar
 redescubrir callejones sin salida y para mantener las afirmaciones defendibles.
 Amplíalas; no las recortes.
+
+**11. La interacción humana en el latido es obligatoria.**
+No implementes respuesta automática, auto-firma, session keys que respondan solas
+ni ningún modo en segundo plano para los retos. Si el cliente responde sin la
+persona, la latencia mide la máquina y la señal de varianza se pierde. Lo que
+debe ser nulo es el **esfuerzo**, no la presencia: un toque, nunca un puzzle.
+
+**12. La detección exige conjunción de señales, no correlación sola.**
+Usuarios honestos que comparten un RPC público comparten sus picos de carga y
+correlacionan entre sí. Un hallazgo de clúster requiere correlación **más al
+menos una señal de coincidencia exacta** (dirección financiadora, parámetros de
+gas, hash de calldata). Ver `requireSignalConjunction` en
+`protocol-params.json`.
 
 ---
 

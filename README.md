@@ -108,6 +108,40 @@ STYX:            participar  ==  ser observado    no existe cómo desapuntarse
 
 ---
 
+## Cómo funciona, en orden
+
+```
+LUNES 12:00      Se abre el enrolamiento (48 h, sin carrera)
+                 Depositas un bono reembolsable. Llegar primero no da ventaja.
+
+MIERCOLES 12:00  Se cierra el enrolamiento
+
+JUEVES 19:00     Ventana de cualificacion: 5 minutos
+                 10 retos en instantes impredecibles dentro de la ventana.
+                 Cada uno: llega una notificacion, pulsas. ~10 s para responder.
+                 Sabes cuando estar, no cuando llegara cada reto.
+
+JUEVES 19:05     Se cierra. El sorteo corre en segundos y ya sabes el resultado.
+
++48 HORAS        Ventana de impugnacion. El detector analiza las 10 rondas,
+                 publica los clusters, cualquiera puede recomputar y refutar.
+                 Al cerrar, tu entrada pasa a definitiva.
+
+DIA DEL EVENTO   Puerta del recinto: pruebas la identidad ligada y entras.
+```
+
+La propiedad es escalonada: en el sorteo obtienes un **derecho**, al pagar un NFT
+**provisional**, y al cerrar la impugnación la entrada **definitiva**. La etapa
+provisional es deliberada: es lo que permite revocar las entradas de un enjambre
+cuando el análisis retrospectivo lo encuentra. En tiempo real hay segundos de
+datos y no se detecta nada; en retrospectiva está el patrón completo.
+
+El detalle de cada fase y los parámetros vigentes están en
+[ARCHITECTURE.md](./ARCHITECTURE.md) y en
+[protocol-params.json](./protocol-params.json).
+
+---
+
 ## Por qué Monad
 
 Monad mainnet produce un bloque cada 300 ms, alcanza finalidad determinista en
@@ -194,10 +228,11 @@ configuración de seguridad, no las aborda esta arquitectura y no se reclaman.
 ## Estructura del repositorio
 
 ```
-contracts/    Contratos Solidity (Foundry)
-indexer/      Indexador de eventos, construye la matriz de features (TypeScript)
-detector/     Analisis de coordinacion y clustering (Python)
-web/          Interfaz de demo y visualizacion del enjambre (Next.js)
+protocol-params.json   Parametros del protocolo (fuente unica de verdad)
+contracts/             Contratos Solidity (Foundry)
+indexer/               Indexador de eventos, construye la matriz de features (TypeScript)
+detector/              Analisis de coordinacion y clustering (Python)
+web/                   Interfaz de demo y visualizacion del enjambre (Next.js)
 ```
 
 Responsabilidades de los contratos:
