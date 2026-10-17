@@ -625,6 +625,22 @@ totalHeartbeats[uint8(uint160(msg.sender))] += 1;
 
 El número de buckets es un parámetro de ajuste. Súbelo si se mide contención.
 
+**La implementación actual no necesita contador.** La ventana se divide en
+sub-ventanas y cae exactamente un reto por cohorte en cada una, así que el número
+de retos es determinista y los `participationScore` son comparables entre
+cohortes sin ningún estado compartido. `respond` no es `payable` y escribe solo
+en el bitmap del propio llamante: una escritura, a un slot de su propiedad
+exclusiva.
+
+**Excepción consciente y documentada.** `Enrollment.enroll` sí usa dos patrones
+que serializan: es `payable`, por lo que acredita el balance del contrato, e
+incrementa un contador global. Es aceptable **solo ahí**, porque el enrolamiento
+es un camino de baja frecuencia por diseño: la ventana de 48 horas existe
+precisamente para que no se forme carrera, lo que deja a cien mil participantes
+por debajo de 1 TPS, y unos 28 TPS incluso si todos se enrolasen en la última
+hora. El invariante 4 apunta a los caminos de alta frecuencia, y el de alta
+frecuencia es `respond`, que corre hasta un millón de veces por venta.
+
 ### Finalidad sin secuenciador de confianza
 
 El producto es la credibilidad de la afirmación de equidad. Si una sola entidad

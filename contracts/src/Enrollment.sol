@@ -130,6 +130,23 @@ contract Enrollment is IEnrollment {
 
     // ------------------------------------------------------------- participation
 
+    /// @notice Post the bond and enrol.
+    ///
+    /// @dev This function knowingly uses two patterns that serialise under
+    ///      optimistic parallel execution: it is `payable`, so it credits the
+    ///      contract balance, and it increments a global counter. Both are
+    ///      shared state.
+    ///
+    ///      That is acceptable here and only here, because enrolment is a
+    ///      deliberately LOW-frequency path. The window is 48 hours wide
+    ///      precisely so that no race forms, which puts 100k participants at
+    ///      well under 1 TPS. Even if everyone enrolled in the final hour that
+    ///      is roughly 28 TPS, far from any contention that matters.
+    ///
+    ///      Invariant 4 in AGENTS.md targets high-frequency paths.
+    ///      `HeartbeatRegistry.respond`, which runs up to a million times per
+    ///      sale, is the one that must stay conflict free: it is not payable and
+    ///      writes only to the caller's own slot.
     function enroll() external payable atPhase(Phase.Enrolling) {
         if (block.timestamp >= closesAt) revert EnrollmentWindowOver();
         if (_bond[msg.sender] != 0) revert AlreadyEnrolled();
