@@ -1,8 +1,9 @@
 # Solidity / Foundry
+# contracts/lib/ se versiona a proposito: forge-std esta vendorizado para que el
+# repositorio compile sin pasos de instalacion. Ver AGENTS.md.
 contracts/out/
 contracts/cache/
 contracts/broadcast/
-contracts/lib/
 
 # Node
 node_modules/

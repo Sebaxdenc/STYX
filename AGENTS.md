@@ -49,6 +49,11 @@ Python se usa en el detector porque el clustering y el trabajo estadístico
 dependen de `networkx`, `scikit-learn` y `scipy`. No lo reimplementes en
 TypeScript para reducir el número de lenguajes.
 
+**`forge-std` está vendorizado** en `contracts/lib/forge-std` (sin `.git`) y se
+versiona a propósito, para que `forge build` funcione recién clonado el repo sin
+submódulos ni pasos de instalación. Para actualizarlo, sustituye el directorio
+por una copia nueva del upstream; no lo edites a mano.
+
 ### Contratos
 
 | Contrato | Responsabilidad |
@@ -69,6 +74,7 @@ cd contracts && forge build
 cd contracts && forge test -vvv
 cd contracts && forge test --gas-report      # obligatorio antes de tocar cifras de capacidad
 cd contracts && forge fmt
+cd contracts && forge script script/Deploy.s.sol --rpc-url $MONAD_TESTNET_RPC
 
 # indexer
 cd indexer && npm install && npm run build && npm test

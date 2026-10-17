@@ -473,15 +473,22 @@ apunta a Monad.
 
 ### Capacidad
 
-Estimaciones, a sustituir por valores medidos con `forge test --gas-report`.
+**Valores medidos** con `forge test --gas-report` sobre la implementación actual,
+no estimaciones.
 
-Asumiendo que un latido directo cuesta unos 45.000 gas (21.000 de base,
-calldata, una escritura de almacenamiento, un evento y la verificación):
+| Función | Ejecución (mediana) | Coste total de transacción |
+|---|---|---|
+| `HeartbeatRegistry.respond` | 35.127 | **~56.000** (+21.000 de base) |
+| `HeartbeatRegistry.respond` (peor caso) | 58.117 | ~79.000 |
+| `Enrollment.enroll` | ~45.000 | ~66.000 |
 
 ```
-Por bloque:   150M / 45k            = ~3.300 latidos
-Por segundo:  3.300 / 0,3 s         = ~11.000 latidos/s
+Por bloque:   150M / 56k            = ~2.680 latidos
+Por segundo:  2.680 / 0,3 s         = ~8.900 latidos/s
 ```
+
+La medición es **peor que la estimación inicial de 45.000** y eso cambia una
+conclusión: lo que parecía un margen ajustado pasa a ser inviable sin cohortes.
 
 **El riesgo aquí es el pico, no la media.** Si los 100.000 participantes
 responden al mismo reto en la misma ventana, el pico es:
@@ -489,13 +496,18 @@ responden al mismo reto en la misma ventana, el pico es:
 ```
 Sin cohortes, ventana de respuesta de 10 s:
               100.000 / 10 s        = 10.000 TPS de pico
-Gas:          10.000 x 45k          = 450M gas/s   = ~90% de la capacidad
+Gas:          10.000 x 56k          = 560M gas/s   = 112% de la capacidad
 ```
 
-Noventa por ciento sin ningún margen, y con una ventana de 3 segundos en lugar
-de 10 serían ~33.000 TPS, **más del triple de la capacidad de la red**. Este fue
-el motivo real para ensanchar la ventana de respuesta y para introducir las
-cohortes.
+**No cabe.** Con el coste real medido, 100.000 participantes respondiendo al
+mismo reto exceden la capacidad de la red en un 12 por ciento. Visto de otra
+forma: una ventana de respuesta de 10 segundos son 33 bloques, que a 2.680
+latidos por bloque dan hueco para ~88.000 respuestas, por debajo de los 100.000
+necesarios.
+
+Y con una ventana de 3 segundos en lugar de 10 serían ~33.000 TPS, **más del
+triple de la capacidad**. Por eso las cohortes **no son una optimización
+opcional: son un requisito** para el caso de cien mil participantes.
 
 Con 20 cohortes desfasadas la carga se reparte y pasa a ser un flujo continuo en
 lugar de ráfagas:
@@ -503,12 +515,13 @@ lugar de ráfagas:
 ```
 Total:        100.000 x 10 respuestas = 1.000.000 tx en 300 s
 Sostenido:    1.000.000 / 300         = ~3.300 TPS
-Gas:          3.300 x 45k             = ~150M gas/s  = ~30% de la capacidad
+Gas:          3.300 x 56k             = ~187M gas/s  = ~37% de la capacidad
 Pico por cohorte: 5.000 / 10 s        = 500 TPS
 ```
 
 Con la **vía agregada**, en la que los participantes firman atestaciones EIP-712
-y relayers sin permisos envían lotes verificados en la cadena:
+y relayers sin permisos envían lotes verificados en la cadena (estimación: esta
+vía todavía no está implementada):
 
 ```
 Por latido, agregado (ecrecover 3k + almacenamiento 5k + calldata, base amortizada):
