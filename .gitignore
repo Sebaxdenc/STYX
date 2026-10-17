@@ -27,6 +27,9 @@ venv/
 *.pem
 *.key
 
+# Direcciones de despliegue: especificas de cada entorno
+deployment.json
+
 # Datos generados por el detector
 # Los datasets e informes se publican por CID, no se versionan aqui.
 detector/data/

@@ -285,3 +285,25 @@ def test_dense_path_runs_below_the_limit():
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         run_detection(heartbeats, generous)  # no debe avisar
+
+
+def test_suspicion_is_never_negative():
+    """Una correlacion negativa es ruido, no evidencia de coordinacion.
+
+    Encontrado probando con datos en el formato real de la cadena: un cluster
+    hallado por la ruta multi_signal, donde la temporizacion es irrelevante por
+    construccion, salia con sospecha negativa y se ordenaba al final de la lista
+    en lugar de la primera.
+    """
+    for jitter in (0, 1, 6, 20):
+        report, _, _ = _run(jitter=jitter)
+        for cluster in report.clusters:
+            assert cluster.suspicion >= 0, (
+                f"sospecha negativa con jitter={jitter}: {cluster.suspicion}"
+            )
+
+
+def test_clustersAreSortedByDescendingSuspicion():
+    report, _, _ = _run(jitter=0)
+    scores = [c.suspicion for c in report.clusters]
+    assert scores == sorted(scores, reverse=True)

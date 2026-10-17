@@ -31,7 +31,7 @@ from dataclasses import dataclass
 import networkx as nx
 import numpy as np
 
-from .cohesion import candidate_groups, expected_null_cohesion, group_cohesion
+from .cohesion import PARTITION_FIELDS, candidate_groups, expected_null_cohesion, group_cohesion
 from .features import FeatureMatrix
 from .model import Cluster
 from .similarity import pairwise_correlation, zero_variance_groups
@@ -241,7 +241,7 @@ def _build_cluster(
     if config.require_conjunction and not signals:
         return None
 
-    suspicion = mean_corr * density * math.log1p(len(members)) * max(share, 1e-9)
+    suspicion = _suspicion(mean_corr, density, len(members), len(signals), share)
 
     return Cluster(
         cluster_id=cluster_id,
@@ -253,6 +253,29 @@ def _build_cluster(
         conjunction_signals=signals,
         suspicion=round(suspicion, 6),
     )
+
+
+def _suspicion(
+    mean_corr: float, density: float, size: int, signal_count: int, share: float
+) -> float:
+    """Puntuacion de sospecha, siempre no negativa.
+
+    Combina dos clases de evidencia independientes:
+
+    - temporal: cuanto se mueven juntas las wallets. Se recorta a cero por abajo,
+      porque una correlacion NEGATIVA no es evidencia de coordinacion, es ruido.
+      Sin ese recorte un cluster hallado por la ruta multi_signal, donde la
+      temporizacion es irrelevante por construccion, podia salir con sospecha
+      negativa y ordenarse al final de la lista.
+    - estructural: cuantas senales de coincidencia exacta comparte el grupo.
+
+    Escala con el tamano, porque que diez mil wallets compartan evidencia es mucho
+    mas improbable que diez, y con la densidad y la cobertura de la senal.
+    """
+    timing = max(mean_corr, 0.0)
+    structural = signal_count / len(PARTITION_FIELDS)
+    evidence = timing + structural
+    return max(evidence * density * math.log1p(size) * max(share, 0.0), 0.0)
 
 
 def _conjunction(

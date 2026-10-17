@@ -224,15 +224,94 @@ contract TicketRegistryTest is Test {
         reg.finalize(alice);
     }
 
-    function test_redeem_revertsWhileProvisional() public {
+    /// @notice El humano entra de inmediato, sin esperar la ventana.
+    /// @dev Hacer esperar a la gente a que cierre la impugnacion seria mal
+    ///      producto sin ganancia de seguridad: la etapa provisional existe para
+    ///      que la revocacion siga siendo posible, no para retener la admision.
+    function test_redeem_worksWhileProvisional() public {
         _claim(alice, aliceNullifier);
+
         vm.prank(alice);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                TicketRegistry.NotRedeemable.selector, TicketRegistry.State.Provisional
-            )
+        reg.redeem(keccak256("reto-de-la-puerta"), abi.encode(aliceSecret));
+
+        assertEq(uint8(reg.stateOf(alice)), uint8(TicketRegistry.State.Redeemed));
+    }
+
+    function test_redeem_revertsWhileProvisionalIfFlagged() public {
+        _claim(bot, keccak256(abi.encodePacked(keccak256("doc-bot"))));
+        cl.setFinding(true);
+        cl.setFlagged(bot, true);
+
+        vm.prank(bot);
+        vm.expectRevert(TicketRegistry.NotFlagged.selector);
+        reg.redeem(keccak256("reto"), abi.encode(keccak256("doc-bot")));
+    }
+
+    // -------------------------------------------------------------- ERC-721
+
+    function test_claim_mintsAnNftToTheHolder() public {
+        _claim(alice, aliceNullifier);
+
+        uint256 tokenId = reg.tokenIdOf(alice);
+        assertGt(tokenId, 0);
+        assertEq(reg.ownerOf(tokenId), alice);
+        assertEq(reg.balanceOf(alice), 1);
+    }
+
+    function test_tokenUri_isSelfContainedAndReflectsState() public {
+        _claim(alice, aliceNullifier);
+        uint256 tokenId = reg.tokenIdOf(alice);
+
+        string memory provisional = reg.tokenURI(tokenId);
+        // Sin IPFS: la imagen viaja dentro del propio token.
+        assertTrue(_startsWith(provisional, "data:application/json;base64,"));
+
+        vm.warp(block.timestamp + DISPUTE_WINDOW + 1);
+        reg.finalize(alice);
+        string memory finalUri = reg.tokenURI(tokenId);
+
+        assertTrue(
+            keccak256(bytes(provisional)) != keccak256(bytes(finalUri)),
+            "la obra debe cambiar con el estado"
         );
-        reg.redeem(keccak256("reto"), abi.encode(aliceSecret));
+    }
+
+    function test_tokenUri_changesWhenRevoked() public {
+        _claim(bot, keccak256("n"));
+        uint256 tokenId = reg.tokenIdOf(bot);
+        string memory before = reg.tokenURI(tokenId);
+
+        cl.setFinding(true);
+        cl.setFlagged(bot, true);
+        reg.revoke(bot);
+
+        // El titular conserva el token, pero la entrada se ve muerta en la
+        // wallet: es la denegacion hecha visible.
+        assertEq(reg.ownerOf(tokenId), bot);
+        assertTrue(keccak256(bytes(before)) != keccak256(bytes(reg.tokenURI(tokenId))));
+    }
+
+    function test_transfersAreBlocked() public {
+        _claim(alice, aliceNullifier);
+        uint256 tokenId = reg.tokenIdOf(alice);
+
+        vm.prank(alice);
+        vm.expectRevert(TicketRegistry.TransfersRestricted.selector);
+        reg.transferFrom(alice, bystander, tokenId);
+    }
+
+    function _startsWith(string memory haystack, string memory needle)
+        internal
+        pure
+        returns (bool)
+    {
+        bytes memory h = bytes(haystack);
+        bytes memory n = bytes(needle);
+        if (h.length < n.length) return false;
+        for (uint256 i = 0; i < n.length; i++) {
+            if (h[i] != n[i]) return false;
+        }
+        return true;
     }
 
     function test_redeem_revertsTwice() public {

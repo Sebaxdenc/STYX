@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
+import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+
 import {IClusterRegistry, IIdentityVerifier, ILottery} from "./interfaces.sol";
+import {TicketArt} from "./TicketArt.sol";
 
 /// @title TicketRegistry
 /// @notice Phase 4 of STYX: issuance, provisional ownership and redemption.
@@ -35,7 +38,7 @@ import {IClusterRegistry, IIdentityVerifier, ILottery} from "./interfaces.sol";
 ///
 /// Once redemption is identity bound, transferability of the wallet becomes
 /// irrelevant rather than being the hole in the design.
-contract TicketRegistry {
+contract TicketRegistry is ERC721 {
     enum State {
         None,
         Provisional,
@@ -59,6 +62,7 @@ contract TicketRegistry {
     error InvalidIdentityProof();
     error TransferFailed();
     error ZeroAddress();
+    error TransfersRestricted();
 
     event TicketClaimed(address indexed holder, bytes32 nullifier, uint256 paid);
     event TicketRevoked(address indexed holder, address caller, uint256 refunded);
@@ -83,13 +87,16 @@ contract TicketRegistry {
     uint256 public issued;
     uint256 public revoked;
 
+    mapping(address => uint256) public tokenIdOf;
+    uint256 private _nextTokenId = 1;
+
     constructor(
         address lottery_,
         address clusters_,
         address identityVerifier_,
         uint256 priceWei_,
         uint256 disputeWindowSeconds_
-    ) {
+    ) ERC721("STYX Ticket", "STYX") {
         if (lottery_ == address(0) || clusters_ == address(0) || identityVerifier_ == address(0)) {
             revert ZeroAddress();
         }
@@ -127,6 +134,14 @@ contract TicketRegistry {
         claimedAt[msg.sender] = block.timestamp;
         paidBy[msg.sender] = msg.value;
         issued += 1;
+
+        // The NFT is minted here, so the holder HAS the ticket immediately and
+        // can see it in their wallet. The provisional state does not withhold
+        // anything: it only keeps revocation possible while the dispute window
+        // is open, and it is reflected in the artwork.
+        uint256 tokenId = _nextTokenId++;
+        tokenIdOf[msg.sender] = tokenId;
+        _safeMint(msg.sender, tokenId);
 
         emit TicketClaimed(msg.sender, nullifier, msg.value);
     }
@@ -186,9 +201,16 @@ contract TicketRegistry {
     ///
     ///      EOA custody is re-checked here, not only at claim, because a
     ///      delegation can be added after the fact.
+    ///      A PROVISIONAL ticket is redeemable too, as long as its holder is not
+    ///      in a committed finding. Making people wait for the dispute window
+    ///      before their ticket works would be bad product for no security gain:
+    ///      the provisional stage exists to keep revocation possible, not to
+    ///      withhold admission. In production the event date is far past the
+    ///      window anyway, so this only matters for a live demo.
     function redeem(bytes32 gateChallenge, bytes calldata identityProof) external {
         State state = stateOf[msg.sender];
-        if (state != State.Final) revert NotRedeemable(state);
+        if (state != State.Final && state != State.Provisional) revert NotRedeemable(state);
+        if (clusters.hasFinding() && clusters.isFlagged(msg.sender)) revert NotFlagged();
         if (msg.sender.code.length != 0) revert ContractCustodyForbidden();
 
         bool ok = identityVerifier.verify(nullifierOf[msg.sender], gateChallenge, identityProof);
@@ -216,6 +238,40 @@ contract TicketRegistry {
 
     function activeTickets() external view returns (uint256) {
         return issued - revoked;
+    }
+
+    // -------------------------------------------------------------- ERC-721
+
+    /// @notice Fully on-chain artwork, so the ticket renders in any wallet the
+    ///         instant it is minted and visibly changes when it is revoked.
+    function tokenURI(uint256 tokenId) public view override returns (string memory) {
+        address holder = _requireOwned(tokenId);
+        State state = stateOf[holder];
+        bool alive = state == State.Provisional || state == State.Final;
+        return TicketArt.render(tokenId, holder, _label(state), alive);
+    }
+
+    function _label(State state) private pure returns (string memory) {
+        if (state == State.Provisional) return "PROVISIONAL";
+        if (state == State.Final) return "DEFINITIVA";
+        if (state == State.Revoked) return "REVOCADA";
+        if (state == State.Redeemed) return "REDIMIDA";
+        return "SIN EMITIR";
+    }
+
+    /// @dev Transfers are blocked. Not because that stops resale on its own, it
+    ///      does not: an operator sells the WALLET and the token never moves.
+    ///      The real control is identity-bound redemption. Blocking transfers
+    ///      just removes the easy path, and the official resale channel will go
+    ///      through this contract rather than around it.
+    function _update(address to, uint256 tokenId, address auth)
+        internal
+        override
+        returns (address)
+    {
+        address from = _ownerOf(tokenId);
+        if (from != address(0) && to != address(0)) revert TransfersRestricted();
+        return super._update(to, tokenId, auth);
     }
 
     receive() external payable {}

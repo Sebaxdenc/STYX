@@ -40,10 +40,15 @@ para los componentes.
 
 ```
 contracts/    Solidity, Foundry
-indexer/      TypeScript, viem        eventos onchain a matriz de features
+swarm/        TypeScript, viem        simulador de adversario + exportador
 detector/     Python                  clustering y estadistica
 web/          TypeScript, Next.js     demo y visualizacion del enjambre
+indexer/      TypeScript, viem        (pendiente) indexer continuo de produccion
 ```
+
+`swarm/` incluye un exportador que cubre la función del indexer a escala de demo.
+Si implementas `indexer/`, debe producir el **mismo formato de dataset** que
+`swarm/src/export.ts`, porque es el que consume el detector.
 
 Python se usa en el detector porque el clustering y el trabajo estadístico
 dependen de `networkx`, `scikit-learn` y `scipy`. No lo reimplementes en
