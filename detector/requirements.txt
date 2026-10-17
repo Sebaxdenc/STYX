@@ -1,0 +1,8 @@
+# Versiones pinneadas a proposito: el detector debe ser reproducible bit a bit,
+# porque el juego de impugnacion exige que un tercero recompute el mismo
+# resultado sobre el dataset publicado. Ver AGENTS.md.
+numpy==2.3.4
+scipy==1.16.3
+networkx==3.5
+pycryptodome==3.23.0
+pytest==9.0.1

@@ -125,8 +125,14 @@ automáticamente, la latencia mide el portátil y la conexión del usuario en lu
 de su reacción, y la señal de varianza desaparece. Pero el esfuerzo debe ser
 nulo: una notificación y un toque, sin nada que resolver. Ver sección 7.
 
-**Cohortes.** Los participantes se reparten en 20 cohortes asignadas por hash de
-dirección, de modo que el adversario no puede elegir ni concentrarse en una. Los
+**Cohortes.** A escala de demo (~200 participantes) `cohortCount` es **1**, y eso
+es mejor en los dos ejes: 200 respuestas en 10 segundos son 20 TPS, así que
+repartir la carga no hace falta, y con una sola cohorte **todos reciben el mismo
+bloque de reto**, sus latencias son directamente comparables y la señal de
+correlación sale más limpia.
+
+A escala de producción los participantes se reparten en 20 cohortes asignadas por
+hash de dirección, de modo que el adversario no puede elegir ni concentrarse en una. Los
 retos están sincronizados dentro de cada cohorte y desfasados entre cohortes, lo
 que suaviza la carga de la red y preserva la señal de correlación, que requiere
 que los miembros comparados actúen simultáneamente. La correlación se calcula
@@ -169,6 +175,29 @@ SABADO 19:05     Las entradas pasan a definitivas
 | 5. Definitivo | Al cerrar la impugnación | La entrada, firme |
 | 6. Redimido | En la puerta | Acceso consumido |
 
+**Línea de tiempo de la demo.** El pitch dura tres minutos y la demo ocupa uno o
+dos, así que los mismos pasos corren comprimidos. Los valores están en
+`protocol-params.json` y hay un test, `test_demoFitsInsideThePitch`, que falla si
+alguien sube una ventana y rompe el encaje.
+
+```
+0:00-0:25  Enrolamiento abierto. El equipo entra, y el publico que
+           escanee el QR tambien. 25 s, sin carrera: llegar primero
+           no da ventaja igual que en produccion.
+0:25-1:10  Cualificacion: 5 retos, uno cada ~9 s, 6 s para responder
+           cada uno. Un toque por reto.
+1:10-1:22  Semilla, sorteo y reclamo. El enjambre tambien gana
+           entradas: a estas alturas nada lo ha filtrado todavia.
+1:22-1:42  El detector corre (30 ms), se compromete el hallazgo, y las
+           entradas del enjambre se REVOCAN en pantalla. Las de las
+           personas pasan a definitivas.
+```
+
+Que el enjambre gane primero y sea revocado después **no es un defecto de la
+demo, es la tesis**: en tiempo real hay segundos de datos y no se detecta nada;
+en retrospectiva está el patrón completo. La etapa provisional es lo que
+convierte ese análisis en una consecuencia ejecutable.
+
 El salto crítico es de 3 a 5. En el sorteo el contrato **no acuña nada**:
 registra que esas direcciones tienen derecho a una entrada. El NFT emitido en la
 etapa 4 es provisional mientras la ventana de impugnación esté abierta, con las
@@ -193,20 +222,45 @@ Queda confirmada en 48 horas."
 
 ### Fase 3: Reparto (`Lottery`)
 
-Al cerrar la ventana de cualificación, los ganadores se seleccionan entre todos
-los participantes cualificados usando aleatoriedad verificable, ponderada por
-`participationScore` con tope:
+**Por qué un umbral por participante y no una selección de ganadores.** El
+diseño obvio, ordenar a los participantes por un rango aleatorio y tomar los
+primeros `inventario`, **no se puede ejecutar en la cadena**: iterar sobre cien
+mil participantes no cabe en ningún bloque. Calcular el conjunto fuera y
+comprometer una raíz funcionaría, pero demostrar igualdad de conjuntos en una
+impugnación es difícil, y cualquier recurso de "gana quien reclame primero"
+reintroduce exactamente la carrera de latencia que el proyecto existe para
+eliminar.
+
+Así que el resultado de cada participante es **independiente** y queda fijado por
+la semilla:
 
 ```
-peso = min(participationScore, TOPE)
+peso = min(participationScore, TOPE) x multiplicador_de_cluster
+u    = keccak256(semilla, ronda, participante)
+gana = u < limite(peso)
 ```
 
-El tope es deliberado. La participación debe contar, pero el sorteo no debe
+Reclamar es **recoger, no competir**. Ser rápido no aporta nada, ser lento no
+quita nada, y cualquiera puede recomputar el resultado de cualquier participante
+a partir de datos públicos.
+
+El tope es deliberado: la participación debe contar, pero el sorteo no debe
 convertirse en una subasta que gane quien comande más máquinas.
 
-Aquí no hay carreras de transacciones. La selección ocurre dentro del contrato,
-así que la latencia no confiere ventaja, no hay orden que explotar y no hay nada
-que front-runear.
+**Por qué varias rondas.** Al ser sorteos independientes, el número de ganadores
+es una variable binomial y una sola ronda no puede acertar el inventario exacto.
+Cada ronda apunta a una fracción conservadora de lo que queda (90 por ciento) y
+la siguiente absorbe el faltante. **La sub-asignación es la dirección segura**:
+solo implica otra ronda. La sobre-asignación no lo es, así que además está
+bloqueada por un tope duro.
+
+La tasa de cada ronda se **deriva del estado de la cadena** mediante código
+inmutable. No hay ninguna entrada de administración en el sorteo, por el
+invariante 7, y la tasa usada en cada ronda se guarda para que cualquier ronda
+pasada siga siendo recomputable.
+
+La semilla se ancla al hash de un bloque futuro, con `requestSeed` llamable por
+cualquiera, de modo que nadie puede conocerla mientras decide si participar.
 
 `Lottery` es inmutable una vez abierta una venta.
 
@@ -232,6 +286,18 @@ La admisión exige una prueba fresca ligada a la identidad fijada en la emisión
 sobre un reto emitido en la puerta, lo que además impide reutilizar pruebas. Una
 vez la redención está ligada a identidad, **la transferibilidad de la wallet pasa
 a ser irrelevante** en lugar de ser el agujero del diseño.
+
+**Revocación.** Mientras la ventana de impugnación está abierta, la entrada es
+provisional y **cualquiera** puede revocar la de un titular marcado en un
+hallazgo comprometido, por el mismo motivo que marcar es permissionless: la
+aplicación no debe depender de que el operador se moleste. El precio se reembolsa
+íntegro, porque una revocación pone precio a la coordinación en lugar de
+confiscar dinero, y la apelación sigue abierta.
+
+Al revocar se **libera el nullifier**, de modo que una persona honesta mal
+atrapada en un clúster pueda reemitir su entrada tras ganar la apelación. Y una
+entrada marcada **no se puede convertir en definitiva**: hay que levantar el
+hallazgo primero, que es lo que mantiene la exclusión no silenciosa.
 
 Medidas de apoyo:
 
@@ -374,22 +440,89 @@ Nota técnica: una wallet con varianza cero hace indefinida la correlación de
 Pearson. Esos casos se marcan directamente por el test de varianza, ya que una
 varianza nula a lo largo de diez rondas es por sí misma anómala.
 
-### Robustez frente al jitter
+### Las cuatro rutas de detección
 
-Un adversario que añada jitter aleatorio por wallet reduce la correlación por
-pares. Dos respuestas:
+Esta estructura no es un diseño previo: cada ruta se añadió porque al medir la
+anterior aparecio un punto ciego concreto.
 
-- Si el jitter se genera en infraestructura compartida, la **distribución** sigue
-  siendo común entre wallets aunque las series individuales se descorrelacionen.
-  Un test de Kolmogorov-Smirnov de dos muestras compara distribuciones en lugar
-  de secuencias.
-- La entropía de la población detecta ambos modos de fallo. Una población real
-  sigue una distribución de cola larga. Un enjambre es o demasiado uniforme o
-  uniformemente aleatorio, y la aleatoriedad uniforme es en sí misma anómala
-  porque las poblaciones reales no son uniformes.
+| Ruta | Qué captura | Punto ciego que cubre |
+|---|---|---|
+| `identical` | Latencia constante e idéntica | La varianza cero hace **indefinida** la correlación de Pearson. Sin esta ruta el enjambre más obvio de todos pasa desapercibido |
+| `cohesive` | Grupos con señal exacta compartida cuyas desviaciones comparten un factor latente | La correlación por pares se desmorona con jitter |
+| `multi_signal` | Grupos que comparten tres o más señales exactas | Con jitter alto la temporización deja de servir, pero el lote sigue visible |
+| `correlated` | Grafo de correlación por pares con comunidades Louvain | Enjambres apretados con coincidencia de señales solo parcial |
 
-Añadir jitter también obliga al adversario a alejarse de su tiempo de respuesta
-óptimo.
+### El jitter rompe la correlación por pares, y la cohesión de grupo lo arregla
+
+Este fue el hallazgo al implementar. Si el adversario añade jitter, la
+correlación entre dos de sus wallets cae a
+
+```
+var_compartida / (var_compartida + var_jitter)
+```
+
+que con jitter moderado baja de 0,6 y se escapa de cualquier umbral útil. Bajar
+el umbral no es opción: dispararía los falsos positivos. **La correlación por
+pares sola no aguanta el jitter**, y afirmar lo contrario sería falso.
+
+La solución es dejar de mirar pares y mirar el grupo. Si `n` wallets comparten un
+factor latente, el perfil medio del grupo estima ese factor con el ruido reducido
+en `sqrt(n)`, y la correlación de cada miembro contra el perfil sube a
+
+```
+sqrt(var_compartida / (var_compartida + var_jitter))
+```
+
+Lo decisivo no es ese valor sino la separación frente al caso independiente: un
+grupo de wallets independientes da una cohesión de aproximadamente `1/sqrt(n)`,
+es decir 0,1 para cien miembros. El perfil se construye dejando fuera al propio
+miembro, porque si no correlacionaría con un perfil que lo contiene.
+
+**El orden de las operaciones es deliberado.** Primero se parte la población por
+señales de coincidencia exacta, que es `O(N)`, y solo después se mide la
+cohesión. Eso satisface el invariante 12 por construcción y protege el falso
+positivo que de verdad importa: los usuarios honestos tras un mismo RPC público
+sí comparten factor latente, pero no comparten financiador ni parámetros de gas,
+así que nunca llegan a formar grupo candidato.
+
+### Resultados medidos
+
+Escenario: 75 por ciento honestos independientes, 15 por ciento enjambre, 10 por
+ciento honestos compartiendo RPC, diez rondas.
+
+| Jitter | Recall | Falsos positivos | Ruta | Sospecha |
+|---|---|---|---|---|
+| 0 | 100% | 0 | `cohesive` | 4,62 |
+| 3 | 100% | 0 | `cohesive` | 3,03 |
+| 6 | 100% | 0 | `multi_signal` | 1,93 |
+| 10 | 100% | 0 | `multi_signal` | 1,26 |
+| 20 | 100% | 0 | `multi_signal` | 0,64 |
+
+La sospecha **se degrada a propósito** al mejorar la evasión: el detector reporta
+menos confianza en lugar de fingir certeza.
+
+| Wallets | Latidos | Tiempo | Memoria pico |
+|---|---|---|---|
+| 10.000 | 93.311 | 12 s | 14 MB |
+| 50.000 | 466.078 | 99 s | 78 MB |
+| 100.000 | 932.303 | 293 s | 157 MB |
+
+La ruta `correlated` usa una matriz densa `O(N^2)`: medido, 10.000 wallets
+consumían 5,8 GB y 46 s, y 100.000 habrían necesitado unos 580 GB. Por encima de
+`max_dense_wallets` se omite con un aviso y el trabajo lo hacen `cohesive` y
+`multi_signal`, que son `O(N*R)`. Cinco minutos para cien mil wallets es holgado
+dentro de una ventana de impugnación de 48 horas.
+
+### El límite honesto, verificado por un test
+
+Un adversario que aleatoriza **la temporización y las huellas**, con financiador,
+gas y calldata distintos por wallet, **no es detectable** con datos onchain. Hay
+un test que lo comprueba, `test_careful_adversary_escapes_and_this_is_documented`,
+para que el límite sea explícito y falsable en lugar de una nota al pie.
+
+Esa evasión no es gratuita: exige infraestructura independiente por identidad y
+fondear cada wallet por una ruta distinta. La afirmación del proyecto es que
+cazamos al adversario económicamente racional, no a uno ilimitado.
 
 ### Pipeline
 
@@ -398,7 +531,7 @@ HeartbeatRegistry emite eventos     (wallet, ronda, bloque, posición)
           |
 indexer construye la matriz          una fila por wallet
           |
-detector calcula similitud y agrupa  Louvain o espectral
+detector aplica las cuatro rutas     identical, cohesive, multi_signal, correlated
           |
 ClusterRegistry publica el commit    raíz Merkle + CID del ruleset
           |
@@ -558,6 +691,22 @@ totalHeartbeats[uint8(uint160(msg.sender))] += 1;
 
 El número de buckets es un parámetro de ajuste. Súbelo si se mide contención.
 
+**La implementación actual no necesita contador.** La ventana se divide en
+sub-ventanas y cae exactamente un reto por cohorte en cada una, así que el número
+de retos es determinista y los `participationScore` son comparables entre
+cohortes sin ningún estado compartido. `respond` no es `payable` y escribe solo
+en el bitmap del propio llamante: una escritura, a un slot de su propiedad
+exclusiva.
+
+**Excepción consciente y documentada.** `Enrollment.enroll` sí usa dos patrones
+que serializan: es `payable`, por lo que acredita el balance del contrato, e
+incrementa un contador global. Es aceptable **solo ahí**, porque el enrolamiento
+es un camino de baja frecuencia por diseño: la ventana de 48 horas existe
+precisamente para que no se forme carrera, lo que deja a cien mil participantes
+por debajo de 1 TPS, y unos 28 TPS incluso si todos se enrolasen en la última
+hora. El invariante 4 apunta a los caminos de alta frecuencia, y el de alta
+frecuencia es `respond`, que corre hasta un millón de veces por venta.
+
 ### Finalidad sin secuenciador de confianza
 
 El producto es la credibilidad de la afirmación de equidad. Si una sola entidad
@@ -656,10 +805,13 @@ Documentados para que no se reintroduzcan.
 2. La detección de coordinación es probabilística. Los falsos positivos son
    posibles, y por eso los hallazgos modulan el peso y abren una impugnación en
    lugar de excluir.
-3. Un adversario sofisticado que ejecute infraestructura genuinamente
-   independiente por identidad, con aleatoriedad independiente, eleva el listón
-   sustancialmente. Cazamos al adversario económicamente racional, no a uno
-   ilimitado.
+3. Un adversario que aleatoriza la temporización **y** las huellas, con
+   financiador, gas y calldata distintos por wallet, no es detectable con datos
+   onchain. No es una conjetura: hay un test que lo verifica,
+   `test_careful_adversary_escapes_and_this_is_documented` en
+   `detector/tests/test_detection.py`. Cazamos al adversario económicamente
+   racional, no a uno ilimitado. La evasión le cuesta infraestructura
+   independiente por identidad y una ruta de fondeo distinta por wallet.
 4. La detección es una carrera armamentística que requiere operación continua. En
    el caso de CrowdSec el operador empezó a rotar direcciones en cuanto se
    aplicaron los bloqueos.
@@ -669,6 +821,17 @@ Documentados para que no se reintroduzcan.
 6. Una persona puede entregar documento y clave y simplemente no asistir. Es
    imposible de prevenir y es el mismo riesgo residual que tienen hoy las
    entradas en papel con control de identidad.
+7. **`ClusterRegistry.resolver` es el único componente de confianza del sistema
+   y choca con el invariante 6.** Adjudicar una afirmación estadística necesita
+   un árbitro; es la razón por la que existen protocolos como Kleros. La
+   mitigación actual es parcial: el rol es inmutable, no puede comprometer
+   hallazgos él mismo, sus decisiones son públicas y están respaldadas por bonos,
+   y marcar wallets y pedir penalizaciones es permissionless. En producción debe
+   sustituirse por un protocolo de arbitraje descentralizado. Se declara aquí en
+   lugar de esconderse.
+8. La escala de demo (~200 participantes, una cohorte) no ejercita el camino de
+   cohortes ni la vía agregada de relayers. Las cifras de capacidad de la sección
+   4 son el argumento de diseño para producción, no una medición de la demo.
 
 ---
 

@@ -9,6 +9,7 @@ optimizer = true
 optimizer_runs = 200
 gas_reports = ["Enrollment", "HeartbeatRegistry"]
 fs_permissions = [{access = "read", path = "../protocol-params.json"}]
+remappings = ["@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/"]
 
 [fmt]
 line_length = 100

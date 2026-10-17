@@ -2,8 +2,10 @@
 pragma solidity 0.8.28;
 
 import {Test} from "forge-std/Test.sol";
+import {ClusterRegistry} from "../src/ClusterRegistry.sol";
 import {Enrollment} from "../src/Enrollment.sol";
 import {HeartbeatRegistry} from "../src/HeartbeatRegistry.sol";
+import {Lottery} from "../src/Lottery.sol";
 import {Params, ProtocolParams} from "../script/Params.sol";
 
 /// @notice Guards protocol-params.json against drift and internal inconsistency.
@@ -67,6 +69,78 @@ contract ParamsTest is Test {
         uint256 responseMs = uint256(p.responseWindowBlocks) * blockTimeMs;
 
         assertGe(responseMs, 5000, "under 5s truncates normal human reaction times");
+    }
+
+    /// @notice La escala de la demo (~200 participantes) debe ser coherente.
+    /// @dev Las cohortes existen para repartir la carga de 100.000 respuestas en
+    ///      10 s. A escala de demo no hacen falta, y una sola cohorte es ademas
+    ///      mejor para detectar, porque todos reciben el mismo bloque de reto y
+    ///      sus latencias son directamente comparables.
+    function test_demoScaleIsCoherent() public view {
+        assertGt(p.inventory, 0, "el inventario no puede ser cero");
+        assertGt(p.roundLengthBlocks, 0);
+
+        if (p.cohortCount == 1) {
+            // Perfil de demo: una cohorte, umbral de cluster pequeno.
+            string memory json = vm.readFile("../protocol-params.json");
+            uint256 minClusterSize = vm.parseJsonUint(json, ".detection.minClusterSize");
+            assertLe(minClusterSize, 20, "con una cohorte el umbral debe ser de escala demo");
+        }
+    }
+
+    function test_fullDeploymentWiresSlasher() public {
+        Enrollment enrollment =
+            new Enrollment(p.bondWei, p.enrollmentWindowSeconds, p.abandonmentForfeitBps);
+        HeartbeatRegistry registry = new HeartbeatRegistry(
+            address(enrollment),
+            p.cohortCount,
+            p.challengeCount,
+            p.subWindowBlocks,
+            p.responseWindowBlocks,
+            p.minResponsesToQualify
+        );
+        ClusterRegistry clusters = new ClusterRegistry(
+            address(enrollment), address(0xBEEF), p.appealBondWei, p.disputeWindowSeconds
+        );
+        Lottery lottery = new Lottery(
+            address(enrollment),
+            address(registry),
+            address(clusters),
+            p.inventory,
+            p.participationCap,
+            p.roundLengthBlocks
+        );
+        enrollment.setSlasher(address(clusters));
+
+        // Solo ClusterRegistry puede penalizar bonos.
+        assertEq(enrollment.slasher(), address(clusters));
+        assertEq(lottery.inventory(), p.inventory);
+        assertEq(lottery.participationCap(), p.participationCap);
+        assertEq(address(lottery.clusters()), address(clusters));
+    }
+
+    /// @notice El ciclo completo debe caber en el tiempo del speech.
+    ///
+    /// @dev El pitch dura 3 minutos y la demo ocupa 1 o 2. Si alguien sube una
+    ///      ventana sin pensar en esto, la demo deja de ser posible en el
+    ///      escenario y este test lo dice antes de descubrirlo en vivo.
+    function test_demoFitsInsideThePitch() public view {
+        string memory json = vm.readFile("../protocol-params.json");
+        uint256 blockTimeMs = vm.parseJsonUint(json, ".network.blockTimeMs");
+
+        uint256 roundSeconds = (p.roundLengthBlocks * blockTimeMs) / 1000;
+        uint256 total = p.enrollmentWindowSeconds + p.qualificationWindowSeconds + roundSeconds
+            + p.disputeWindowSeconds;
+
+        assertLe(total, 120, "el ciclo completo debe caber en dos minutos");
+        assertGe(
+            p.enrollmentWindowSeconds, 15, "hace falta tiempo para que el publico escanee el QR"
+        );
+        assertGe(
+            (uint256(p.responseWindowBlocks) * blockTimeMs) / 1000,
+            5,
+            "menos de 5 s no da para confirmar en la wallet"
+        );
     }
 
     function test_paramsProduceDeployableContracts() public {

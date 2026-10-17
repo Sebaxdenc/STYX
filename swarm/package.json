@@ -1,0 +1,11 @@
+{
+  "name": "styx-swarm",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "swarm": "tsx src/cli.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": { "viem": "2.40.0" },
+  "devDependencies": { "tsx": "4.21.0", "typescript": "5.9.3", "@types/node": "22.19.0" }
+}

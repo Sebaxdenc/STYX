@@ -40,10 +40,15 @@ para los componentes.
 
 ```
 contracts/    Solidity, Foundry
-indexer/      TypeScript, viem        eventos onchain a matriz de features
+swarm/        TypeScript, viem        simulador de adversario + exportador
 detector/     Python                  clustering y estadistica
 web/          TypeScript, Next.js     demo y visualizacion del enjambre
+indexer/      TypeScript, viem        (pendiente) indexer continuo de produccion
 ```
+
+`swarm/` incluye un exportador que cubre la función del indexer a escala de demo.
+Si implementas `indexer/`, debe producir el **mismo formato de dataset** que
+`swarm/src/export.ts`, porque es el que consume el detector.
 
 Python se usa en el detector porque el clustering y el trabajo estadístico
 dependen de `networkx`, `scikit-learn` y `scipy`. No lo reimplementes en
@@ -80,7 +85,10 @@ cd contracts && forge script script/Deploy.s.sol --rpc-url $MONAD_TESTNET_RPC
 cd indexer && npm install && npm run build && npm test
 
 # detector
-cd detector && pip install -r requirements.txt && pytest
+cd detector && python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
+cd detector && ./.venv/bin/python -m pytest
+cd detector && ./.venv/bin/python -m styx_detector simulate --out data/hb.json --jitter 3
+cd detector && ./.venv/bin/python -m styx_detector detect --input data/hb.json
 
 # web
 cd web && npm install && npm run build
@@ -160,8 +168,14 @@ poder falsificar, y el autoenvío debe seguir disponible.
 
 **7. `Lottery` es inmutable una vez abierta una venta.**
 Sin proxy, sin ruta de actualización, sin función de administración que pueda
-influir en un sorteo. Las funciones privilegiadas en otros contratos van detrás
-de un timelock.
+influir en un sorteo. La tasa de cada ronda se **deriva** del estado de la cadena
+mediante código inmutable: no añadas ningún parámetro de administración al
+sorteo. Las funciones privilegiadas en otros contratos van detrás de un timelock.
+
+`ClusterRegistry.resolver` es la única excepción de confianza del sistema y está
+declarada como limitación 7 en ARCHITECTURE.md. No amplíes sus poderes: no puede
+comprometer hallazgos, y marcar wallets y pedir penalizaciones debe seguir siendo
+permissionless.
 
 **8. Asume que el adversario ha leído este repositorio.**
 La seguridad no debe depender de que ningún detalle sea secreto. Si un mecanismo
@@ -231,6 +245,12 @@ gas, hash de calldata). Ver `requireSignalConjunction` en
 - No uses componentes conexas para agrupar. Con millones de aristas espurias el
   grafo se fusiona por percolación. Usa Louvain o clustering espectral. Ver
   ARCHITECTURE.md sección 3.
+- El detector tiene **cuatro rutas** (`identical`, `cohesive`, `multi_signal`,
+  `correlated`) y cada una cubre un punto ciego medido de las otras. Antes de
+  eliminar o simplificar una, lee `detector/README.md`: la correlación por pares
+  sola no aguanta el jitter, y la varianza cero hace indefinido a Pearson.
+- La matriz de correlación densa es `O(N^2)` en memoria. Respeta
+  `max_dense_wallets`: medido, 10.000 wallets eran 5,8 GB.
 
 ---
 
