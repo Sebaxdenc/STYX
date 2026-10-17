@@ -24,8 +24,8 @@ export function DemoBadge() {
       enrolamiento {formatDuration(params.enrollment.windowSeconds)}, cualificación{" "}
       {formatDuration(params.qualification.windowSeconds)} con{" "}
       {params.qualification.challengeCount} retos, impugnación{" "}
-      {formatDuration(params.dispute.windowSeconds)}. El diseño de producción usa 48 h, 5 min
-      y 48 h.
+      {formatDuration(params.dispute.windowSeconds)}. Las ventanas del diseño de producción
+      están documentadas en ARCHITECTURE.md.
     </p>
   );
 }

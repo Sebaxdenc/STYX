@@ -93,11 +93,17 @@ export function describePath(path: DetectionPath): string {
   }
 }
 
+/**
+ * Labels for the exact-match signals.
+ *
+ * Keys are the identifiers the detector actually emits, verified against a
+ * generated report rather than assumed: they carry a `shared_` prefix.
+ */
 const SIGNAL_LABELS: Readonly<Record<string, string>> = {
-  funder: "dirección financiadora común",
-  gas_price: "mismo gasPrice exacto",
-  gas_limit: "mismo gasLimit exacto",
-  calldata_hash: "mismo hash de calldata",
+  shared_funder: "misma dirección financiadora",
+  shared_gas_price: "mismo gasPrice exacto",
+  shared_gas_limit: "mismo gasLimit exacto",
+  shared_calldata_hash: "mismo hash de calldata",
 };
 
 export function describeSignal(signal: string): string {
