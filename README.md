@@ -254,6 +254,73 @@ Responsabilidades de los contratos:
 
 Moneda nativa `MON`. Faucet de testnet: `https://faucet.monad.xyz`
 
+## Ejecución de la demo
+
+La demo del enjambre se ejecuta desde [swarm/](./swarm/). Instala las
+dependencias y configura las credenciales únicamente en el entorno local:
+
+```bash
+cd swarm
+npm install
+
+export SWARM_FUNDER_PRIVATE_KEY="0x..." # wallet de prueba con MON
+export PK="0x..."                       # deployer de prueba
+export SWARM_BOT_MNEMONIC="..."         # mnemónica nueva para esta demo
+
+npm run swarm -- prefund --size 20
+npm run swarm -- check --size 20
+npm run swarm -- demo --size 20
+```
+
+Para generar el dataset y el informe del detector por separado:
+
+```bash
+npm run swarm -- export --from <bloque-inicial-de-la-demo>
+cd ../detector
+./.venv/bin/python -m styx_detector detect \
+  --input data/heartbeats.json --out data/report.json
+```
+
+La interfaz web muestra el resultado individual en `/resultado` y el informe
+del detector en `/enjambre`. La wallet debe estar conectada a Monad Testnet
+(chain ID `10143`).
+
+## Despliegue actual de contratos
+
+Estas son las direcciones del despliegue vigente en Monad Testnet:
+
+| Contrato | Dirección |
+|---|---|
+| `Enrollment` | `0x3046575E3D38CdF618F62bdA01506a8B74dB9e32` |
+| `HeartbeatRegistry` | `0x3eD527e51c45144Cd2623f76D976c071334241a4` |
+| `ClusterRegistry` | `0x3007Ff42a59CB1E3600c2B4fADDEb303A8bAA769` |
+| `Lottery` | `0x380fc02fBBAF0601d5935c391cdd97cb74221d6C` |
+| `TicketRegistry` | `0x0B57Da09FF40bC6FCACF846F10828539D8095E34` |
+| `IdentityVerifier` | `0xE3D52B833E0e4E591cB7280472d18154a93412B9` |
+| `resolver` | `0x5BD2EB6d2a922Dc72E9450f9b24c147Bd23C21A1` |
+
+Este despliegue es **de un solo uso para una demo**. `Enrollment` cambia de
+fase, los latidos y las rondas quedan registrados en la cadena, y `Lottery` es
+inmutable una vez abierta. Por eso no se debe ejecutar otra demo sobre estas
+mismas direcciones después de iniciar el ciclo.
+
+Para iniciar un ciclo nuevo hay que desplegar contratos nuevos y actualizar las
+direcciones de la web:
+
+```bash
+./redeploy.sh
+```
+
+El redespliegue no elimina automáticamente los informes locales del ciclo
+anterior. Antes de una nueva demo, limpia los datos generados:
+
+```bash
+rm -f detector/data/report.json detector/data/heartbeats.json
+```
+
+No compartas `SWARM_BOT_MNEMONIC`, claves privadas ni archivos `.env`. Usa
+únicamente cuentas de prueba sin fondos reales.
+
 ## Estado
 
 Desarrollo temprano. Construido para una hackathon de Monad. Sin auditar. No
