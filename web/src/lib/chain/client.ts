@@ -89,6 +89,11 @@ export const gasLimits = {
   respond: 85_000n,
   enroll: 95_000n,
   withdrawBond: 60_000n,
+  claimEntitlement: 140_000n,
+  // Mints an ERC-721 and writes the nullifier, so it is the heaviest path here.
+  claimTicket: 260_000n,
+  finalize: 80_000n,
+  appeal: 110_000n,
 } as const;
 
 export type { Account, PublicClient, WalletClient };

@@ -7,14 +7,24 @@
  * achieves the same round-trip saving without that dependency.
  */
 import type { PublicClient } from "viem";
-import { enrollmentAbi, heartbeatRegistryAbi, type EnrollmentPhaseValue } from "./abis";
+import {
+  clusterRegistryAbi,
+  enrollmentAbi,
+  heartbeatRegistryAbi,
+  lotteryAbi,
+  ticketRegistryAbi,
+  type AppealStateValue,
+  type EnrollmentPhaseValue,
+  type LotteryPhaseValue,
+  type TicketStateValue,
+} from "./abis";
 import { addresses } from "./config";
 import type { QualificationWindow } from "./challenge";
 
 export class ContractsNotConfiguredError extends Error {
   constructor() {
     super(
-      "Faltan las direcciones de los contratos. Define NEXT_PUBLIC_ENROLLMENT_ADDRESS y NEXT_PUBLIC_HEARTBEAT_ADDRESS",
+      "Faltan direcciones de contrato. Define NEXT_PUBLIC_ENROLLMENT_ADDRESS, NEXT_PUBLIC_HEARTBEAT_ADDRESS, NEXT_PUBLIC_LOTTERY_ADDRESS, NEXT_PUBLIC_TICKET_REGISTRY_ADDRESS y NEXT_PUBLIC_CLUSTER_REGISTRY_ADDRESS en web/.env.local",
     );
     this.name = "ContractsNotConfiguredError";
   }
@@ -23,12 +33,21 @@ export class ContractsNotConfiguredError extends Error {
 function requireAddresses(): {
   readonly enrollment: `0x${string}`;
   readonly heartbeatRegistry: `0x${string}`;
+  readonly lottery: `0x${string}`;
+  readonly ticketRegistry: `0x${string}`;
+  readonly clusterRegistry: `0x${string}`;
 } {
-  const { enrollment, heartbeatRegistry } = addresses;
-  if (enrollment === null || heartbeatRegistry === null) {
+  const { enrollment, heartbeatRegistry, lottery, ticketRegistry, clusterRegistry } = addresses;
+  if (
+    enrollment === null ||
+    heartbeatRegistry === null ||
+    lottery === null ||
+    ticketRegistry === null ||
+    clusterRegistry === null
+  ) {
     throw new ContractsNotConfiguredError();
   }
-  return { enrollment, heartbeatRegistry };
+  return { enrollment, heartbeatRegistry, lottery, ticketRegistry, clusterRegistry };
 }
 
 // ------------------------------------------------------------------ enrollment
@@ -204,4 +223,204 @@ export async function readChallengeBlockOf(
 
 export function hasRespondedTo(responseBits: number, round: number): boolean {
   return (responseBits & (1 << round)) !== 0;
+}
+
+// -------------------------------------------------------------------- lottery
+
+export interface LotteryState {
+  readonly phase: LotteryPhaseValue;
+  readonly seed: `0x${string}`;
+  readonly seedBlock: bigint;
+  readonly inventory: bigint;
+  readonly issued: bigint;
+  readonly currentRound: number;
+  readonly currentRoundClosesAt: bigint;
+  readonly roundOpen: boolean;
+  readonly participationCap: number;
+}
+
+export async function readLotteryState(client: PublicClient): Promise<LotteryState> {
+  const { lottery } = requireAddresses();
+  const base = { address: lottery, abi: lotteryAbi } as const;
+
+  const [
+    phase,
+    seed,
+    seedBlock,
+    inventory,
+    issued,
+    currentRound,
+    currentRoundClosesAt,
+    roundOpen,
+    participationCap,
+  ] = await Promise.all([
+    client.readContract({ ...base, functionName: "phase" }),
+    client.readContract({ ...base, functionName: "seed" }),
+    client.readContract({ ...base, functionName: "seedBlock" }),
+    client.readContract({ ...base, functionName: "inventory" }),
+    client.readContract({ ...base, functionName: "issued" }),
+    client.readContract({ ...base, functionName: "currentRound" }),
+    client.readContract({ ...base, functionName: "currentRoundClosesAt" }),
+    client.readContract({ ...base, functionName: "roundOpen" }),
+    client.readContract({ ...base, functionName: "participationCap" }),
+  ]);
+
+  return {
+    phase: phase as LotteryPhaseValue,
+    seed,
+    seedBlock,
+    inventory,
+    issued,
+    currentRound,
+    currentRoundClosesAt,
+    roundOpen,
+    participationCap,
+  };
+}
+
+export interface ParticipantLottery {
+  readonly hasEntitlement: boolean;
+  readonly wonInRound: number;
+  /** Participation capped, then scaled by any cluster finding. */
+  readonly weight: bigint;
+  /** Outcome in the open round. Fixed by the seed, so recomputable by anyone. */
+  readonly selectedInCurrentRound: boolean;
+}
+
+export async function readParticipantLottery(
+  client: PublicClient,
+  participant: `0x${string}`,
+  currentRound: number,
+): Promise<ParticipantLottery> {
+  const { lottery } = requireAddresses();
+  const base = { address: lottery, abi: lotteryAbi } as const;
+
+  const [hasEntitlement, wonInRound, weight, selectedInCurrentRound] = await Promise.all([
+    client.readContract({ ...base, functionName: "hasEntitlement", args: [participant] }),
+    client.readContract({ ...base, functionName: "wonInRound", args: [participant] }),
+    client.readContract({ ...base, functionName: "weightOf", args: [participant] }),
+    currentRound === 0
+      ? Promise.resolve(false)
+      : client.readContract({
+          ...base,
+          functionName: "isSelected",
+          args: [participant, currentRound],
+        }),
+  ]);
+
+  return { hasEntitlement, wonInRound, weight, selectedInCurrentRound };
+}
+
+// --------------------------------------------------------------------- ticket
+
+export interface ParticipantTicket {
+  readonly state: TicketStateValue;
+  /** Unix seconds. Zero when no ticket was claimed. */
+  readonly disputeDeadline: bigint;
+  readonly tokenId: bigint;
+  readonly priceWei: bigint;
+}
+
+export async function readParticipantTicket(
+  client: PublicClient,
+  holder: `0x${string}`,
+): Promise<ParticipantTicket> {
+  const { ticketRegistry } = requireAddresses();
+  const base = { address: ticketRegistry, abi: ticketRegistryAbi } as const;
+
+  const [state, disputeDeadline, tokenId, priceWei] = await Promise.all([
+    client.readContract({ ...base, functionName: "stateOf", args: [holder] }),
+    client.readContract({ ...base, functionName: "disputeDeadline", args: [holder] }),
+    client.readContract({ ...base, functionName: "tokenIdOf", args: [holder] }),
+    client.readContract({ ...base, functionName: "priceWei" }),
+  ]);
+
+  return { state: state as TicketStateValue, disputeDeadline, tokenId, priceWei };
+}
+
+// ------------------------------------------------------------------- clusters
+
+/**
+ * Everything needed to satisfy design invariant 3 for one participant.
+ *
+ * A finding must never exclude silently: the interface has to show the reason,
+ * the evidence and the appeal path. The reason is the cluster assignment, the
+ * evidence is the committed Merkle root plus the published ruleset and dataset
+ * CIDs that let a third party recompute it, and the appeal path is `appeal()`.
+ */
+export interface ClusterFinding {
+  readonly hasFinding: boolean;
+  readonly voided: boolean;
+  readonly root: `0x${string}`;
+  readonly rulesetCid: string;
+  readonly datasetCid: string;
+  readonly disputeClosesAt: bigint;
+  readonly appealBond: bigint;
+  readonly flaggedMultiplierBps: bigint;
+}
+
+export async function readClusterFinding(client: PublicClient): Promise<ClusterFinding> {
+  const { clusterRegistry } = requireAddresses();
+  const base = { address: clusterRegistry, abi: clusterRegistryAbi } as const;
+
+  const [
+    hasFinding,
+    voided,
+    root,
+    rulesetCid,
+    datasetCid,
+    disputeClosesAt,
+    appealBond,
+    flaggedMultiplierBps,
+  ] = await Promise.all([
+    client.readContract({ ...base, functionName: "hasFinding" }),
+    client.readContract({ ...base, functionName: "voided" }),
+    client.readContract({ ...base, functionName: "root" }),
+    client.readContract({ ...base, functionName: "rulesetCid" }),
+    client.readContract({ ...base, functionName: "datasetCid" }),
+    client.readContract({ ...base, functionName: "disputeClosesAt" }),
+    client.readContract({ ...base, functionName: "appealBond" }),
+    client.readContract({ ...base, functionName: "FLAGGED_MULTIPLIER_BPS" }),
+  ]);
+
+  return {
+    hasFinding,
+    voided,
+    root,
+    rulesetCid,
+    datasetCid,
+    disputeClosesAt,
+    appealBond,
+    flaggedMultiplierBps,
+  };
+}
+
+export interface ParticipantCluster {
+  readonly isFlagged: boolean;
+  readonly clusterId: bigint;
+  readonly appealState: AppealStateValue;
+  /** 10000 means untouched. A finding reduces weight, never zeroes it. */
+  readonly weightMultiplierBps: bigint;
+}
+
+export async function readParticipantCluster(
+  client: PublicClient,
+  participant: `0x${string}`,
+): Promise<ParticipantCluster> {
+  const { clusterRegistry } = requireAddresses();
+  const base = { address: clusterRegistry, abi: clusterRegistryAbi } as const;
+
+  const [isFlagged, clusterId, appealState, weightMultiplierBps] = await Promise.all([
+    client.readContract({ ...base, functionName: "isFlagged", args: [participant] }),
+    client.readContract({ ...base, functionName: "clusterOf", args: [participant] }),
+    client.readContract({ ...base, functionName: "appealState", args: [participant] }),
+    client.readContract({ ...base, functionName: "weightMultiplierBps", args: [participant] }),
+  ]);
+
+  return {
+    isFlagged,
+    clusterId,
+    appealState: appealState as AppealStateValue,
+    weightMultiplierBps,
+  };
 }

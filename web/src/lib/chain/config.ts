@@ -59,8 +59,11 @@ function readAddress(value: string | undefined): `0x${string}` | null {
 export const addresses = {
   enrollment: readAddress(process.env.NEXT_PUBLIC_ENROLLMENT_ADDRESS),
   heartbeatRegistry: readAddress(process.env.NEXT_PUBLIC_HEARTBEAT_ADDRESS),
+  lottery: readAddress(process.env.NEXT_PUBLIC_LOTTERY_ADDRESS),
+  ticketRegistry: readAddress(process.env.NEXT_PUBLIC_TICKET_REGISTRY_ADDRESS),
+  clusterRegistry: readAddress(process.env.NEXT_PUBLIC_CLUSTER_REGISTRY_ADDRESS),
 } as const;
 
 export function isDeployed(): boolean {
-  return addresses.enrollment !== null && addresses.heartbeatRegistry !== null;
+  return Object.values(addresses).every((address) => address !== null);
 }
