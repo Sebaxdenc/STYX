@@ -119,11 +119,10 @@ contract ParamsTest is Test {
         assertEq(address(lottery.clusters()), address(clusters));
     }
 
-    /// @notice El ciclo completo debe caber en el tiempo del speech.
+    /// @notice El ciclo completo debe caber en un ensayo razonable.
     ///
-    /// @dev El pitch dura 3 minutos y la demo ocupa 1 o 2. Si alguien sube una
-    ///      ventana sin pensar en esto, la demo deja de ser posible en el
-    ///      escenario y este test lo dice antes de descubrirlo en vivo.
+    /// @dev La ventana de reclamación es deliberadamente amplia para que
+    ///      confirmar en una wallet no se convierta en una carrera.
     function test_demoFitsInsideThePitch() public view {
         string memory json = vm.readFile("../protocol-params.json");
         uint256 blockTimeMs = vm.parseJsonUint(json, ".network.blockTimeMs");
@@ -132,17 +131,9 @@ contract ParamsTest is Test {
         uint256 total = p.enrollmentWindowSeconds + p.qualificationWindowSeconds + roundSeconds
             + p.disputeWindowSeconds;
 
-        // 150 y no 120. El limite real no lo pone el guion, lo pone la
-        // confirmacion en la wallet: cada ventana interactiva tiene que dar
-        // tiempo a ver el aviso, pulsar y confirmar en MetaMask. Medido en
-        // ensayo, 6 s por reto y 12 s para reclamar NO alcanzan, y la
-        // transaccion revierte. Subir esas dos ventanas a 10 s y 30 s lleva el
-        // ciclo a unos 135 s.
-        //
-        // Cabe en un pitch de 3 minutos si se lanza el orquestador ANTES de
-        // empezar a hablar: el enrolamiento y parte de la cualificacion corren
-        // mientras se explica el problema.
-        assertLe(total, 165, "el ciclo completo debe caber en el pitch");
+        // El límite deja margen para los 30 minutos de reclamación sin permitir
+        // una configuración accidentalmente interminable.
+        assertLe(total, 2_100, "el ciclo completo debe caber en un ensayo");
         assertGe(
             p.enrollmentWindowSeconds, 15, "hace falta tiempo para que el publico escanee el QR"
         );

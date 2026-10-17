@@ -46,8 +46,8 @@
   "lottery": {
     "participationCap": 3,
     "_participationCapComment": "min(participationScore, cap). Con 4 retos permite fallar 1 sin perder peso maximo. PRODUCCION: 8 de 10.",
-    "roundLengthBlocks": 100,
-    "_roundLengthBlocksComment": "100 bloques = 30 s para reclamar. MEDIDO EN ENSAYO: con 40 bloques (12 s) un humano no llega a ver el resultado, pulsar y confirmar, y la transaccion revierte con NoRoundOpen. Reclamar es recoger, no competir, pero hay que darle tiempo a recoger.",
+    "roundLengthBlocks": 6000,
+    "_roundLengthBlocksComment": "6000 bloques = 30 min para reclamar a 300 ms por bloque. Reclamar es recoger, no competir: la ventana amplia permite abrir MetaMask, revisar el resultado y confirmar sin convertir la velocidad en una ventaja.",
     "immutableOnceOpen": true
   },
 
