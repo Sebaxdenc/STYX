@@ -29,6 +29,18 @@ export interface ClusterReport {
   readonly suspicion: number;
 }
 
+/**
+ * Merkle proof for one flagged wallet.
+ *
+ * Without these the on-chain commitment is useless: `ClusterRegistry.markFlagged`
+ * requires a proof against the committed root, and without marking there is no
+ * revocation.
+ */
+export interface WalletProof {
+  readonly clusterId: number;
+  readonly proof: readonly string[];
+}
+
 export interface DetectorReport {
   readonly merkle_root: string;
   /** Ties the report to the exact ruleset it was generated with. */
@@ -36,6 +48,8 @@ export interface DetectorReport {
   readonly wallet_count: number;
   readonly round_count: number;
   readonly clusters: readonly ClusterReport[];
+  /** Keyed by wallet address, as written by `cluster_proofs`. */
+  readonly proofs: Readonly<Record<string, WalletProof>>;
 }
 
 export function isDetectorReport(value: unknown): value is DetectorReport {
