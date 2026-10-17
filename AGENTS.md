@@ -40,11 +40,17 @@ para los componentes.
 
 ```
 contracts/    Solidity, Foundry
-swarm/        TypeScript, viem        simulador de adversario + exportador
+swarm/        TypeScript, viem        orquestador + adversario + exportador
 detector/     Python                  clustering y estadistica
-web/          TypeScript, Next.js     demo y visualizacion del enjambre
+web/          TypeScript, Next.js 16  interfaz y visualizacion del enjambre
 indexer/      TypeScript, viem        (pendiente) indexer continuo de produccion
 ```
+
+**La web se despliega parcialmente en Vercel.** `/`, `/cualificacion` y
+`/resultado` funcionan allí porque leen la cadena desde el navegador.
+`/enjambre` **no**, porque `/api/report` lee `detector/data/report.json` del
+disco local y ese fichero se genera durante la demo. Se proyecta desde local.
+Ver DEPLOY.md sección 7 antes de tocar esa ruta.
 
 `swarm/` incluye un exportador que cubre la función del indexer a escala de demo.
 Si implementas `indexer/`, debe producir el **mismo formato de dataset** que

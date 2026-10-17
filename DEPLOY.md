@@ -96,6 +96,9 @@ cd detector && python3 -m venv .venv && ./.venv/bin/pip install -r requirements.
 
 # Enjambre
 cd swarm && npm install && npx tsc --noEmit && cd ..
+
+# Web
+cd web && npm install && npm run build && cd ..
 ```
 
 Si los tests pasan, el repo está sano. **Hazlo la noche antes, no media hora
@@ -255,7 +258,73 @@ ensayar, arriesgado en vivo.
 
 ---
 
-## 7. Qué decir mientras corre
+## 7. Vercel: qué funciona y qué no
+
+**Sí puedes subirlo, pero reparte las pantallas entre dos sitios.** El build pasa
+limpio y las pantallas que toca el público funcionan perfectamente. La del
+enjambre no, y conviene saber por qué antes de descubrirlo en el escenario.
+
+| Pantalla | En Vercel | Por qué |
+|---|---|---|
+| `/` enrolamiento | ✅ | Lee la cadena desde el navegador |
+| `/cualificacion` | ✅ | Igual, y el reto se calcula en el cliente |
+| `/resultado` | ✅ | Igual |
+| `/enjambre` | ❌ | Depende de un fichero local |
+
+La visualización del enjambre pide `/api/report`, y esa ruta lee
+`detector/data/report.json` **del disco de la máquina**. En Vercel eso no puede
+funcionar por tres razones a la vez: el fichero está en `.gitignore` y no viaja
+en el despliegue; `process.cwd()` en una función serverless apunta al bundle y no
+a la raíz del repo; y el informe **se genera durante la demo**, en la fase 4, así
+que no existe cuando se construye el proyecto.
+
+### El reparto que funciona
+
+```
+Vercel  ->  /  /cualificacion  /resultado     el QR del publico apunta aqui
+Local   ->  /enjambre                         la pantalla del proyector
+```
+
+Tiene sentido además por otra razón: el público entra desde su móvil y necesita
+una URL pública, mientras que la visualización la proyectas tú desde el portátil
+que ya está corriendo el orquestador y el detector. Cero cambios de código.
+
+```bash
+# En el portatil del proyector
+cd web && npm run build && npm start     # http://localhost:3000/enjambre
+```
+
+### Configurar Vercel
+
+1. **Root Directory**: `web`
+2. **Framework**: Next.js (lo detecta solo)
+3. **Variables de entorno**: copia los nombres de `web/.env.example` y pon las
+   cinco direcciones de `deployment.json`.
+
+   Esto hay que hacerlo a mano. En local las sincroniza
+   `scripts/sync-deployment.mjs` desde `deployment.json`, pero ese fichero está
+   en `.gitignore` a propósito, así que en Vercel no llega.
+
+4. **`NEXT_PUBLIC_MONAD_RPC_URL`**: pon el RPC dedicado. Con el público, unas
+   decenas de móviles escaneando el QR a la vez agotan el límite.
+
+> Si olvidas las direcciones, la interfaz no se rompe: `isDeployed()` detecta que
+> faltan y lo muestra como estado de configuración. Pero nadie podrá enrolarse.
+
+### Si quieres el enjambre también en Vercel
+
+Habría que dejar de leer el fichero y **leer la cadena**: `ClusterRegistry` emite
+`WalletFlagged(wallet, clusterId, marker)` y `HeartbeatRegistry` emite
+`Heartbeat` con las latencias. Con esos dos eventos se reconstruye la
+visualización completa sin ningún fichero local.
+
+Sería además más honesto que leer un JSON: mostraría lo que está **realmente
+comprometido y verificable en la cadena**, que es justo la tesis del proyecto.
+No es necesario para la demo, pero es la evolución natural de esa pantalla.
+
+---
+
+## 8. Qué decir mientras corre
 
 Lo que el jurado tiene que entender en esos 90 segundos:
 
@@ -276,7 +345,7 @@ npm run swarm -- attack --size 40 --careful    # este ESCAPA, a proposito
 
 ---
 
-## 8. Cuando algo falle
+## 9. Cuando algo falle
 
 | Síntoma | Causa | Qué hacer |
 |---|---|---|
@@ -300,7 +369,7 @@ a propósito. Para otra pasada, **vuelve a desplegar** (paso 3) y actualiza
 
 ---
 
-## 9. Lo que no hay que hacer
+## 10. Lo que no hay que hacer
 
 - **No despliegues a mainnet.** Nada de esto está auditado.
 - **No pongas fondos reales en las wallets del enjambre**: se derivan de una
