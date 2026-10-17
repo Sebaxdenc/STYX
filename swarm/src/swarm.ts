@@ -55,6 +55,7 @@ const SWARM_MNEMONIC =
 /** Shared gas settings. One script, one configuration, one fingerprint. */
 const SWARM_GAS_PRICE = 55_000_000_000n;
 const SWARM_GAS_LIMIT = 120_000n;
+const NATIVE_TRANSFER_GAS = 21_000n;
 
 /**
  * Monad's reserve balance makes under-funding bite twice.
@@ -154,6 +155,11 @@ async function fund(
     const hash = await funderClient.sendTransaction({
       to: bot.address,
       value,
+      // Monad can reject eth_estimateGas with a reserve-balance violation even
+      // when a plain native transfer is valid. Native transfers have a fixed
+      // gas cost, so bypass estimation and submit the measured limit directly.
+      gas: NATIVE_TRANSFER_GAS,
+      gasPrice: SWARM_GAS_PRICE,
       chain: null,
       account: funderClient.account ?? null,
     });
