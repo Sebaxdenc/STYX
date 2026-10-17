@@ -6,6 +6,7 @@ import {ClusterRegistry} from "../src/ClusterRegistry.sol";
 import {Enrollment} from "../src/Enrollment.sol";
 import {HeartbeatRegistry} from "../src/HeartbeatRegistry.sol";
 import {Lottery} from "../src/Lottery.sol";
+import {DemoIdentityVerifier, TicketRegistry} from "../src/TicketRegistry.sol";
 import {Params, ProtocolParams} from "./Params.sol";
 
 /// @notice Deploys STYX using the parameters in protocol-params.json.
@@ -17,7 +18,9 @@ contract Deploy is Script {
             Enrollment enrollment,
             HeartbeatRegistry registry,
             ClusterRegistry clusters,
-            Lottery lottery
+            Lottery lottery,
+            TicketRegistry tickets,
+            DemoIdentityVerifier verifier
         )
     {
         ProtocolParams memory p = Params.load(vm);
@@ -53,6 +56,15 @@ contract Deploy is Script {
             p.roundLengthBlocks
         );
 
+        verifier = new DemoIdentityVerifier();
+        tickets = new TicketRegistry(
+            address(lottery),
+            address(clusters),
+            address(verifier),
+            p.priceWei,
+            p.disputeWindowSeconds
+        );
+
         // ClusterRegistry is the only contract allowed to forfeit bonds.
         enrollment.setSlasher(address(clusters));
 
@@ -62,6 +74,8 @@ contract Deploy is Script {
         console.log("HeartbeatRegistry", address(registry));
         console.log("ClusterRegistry  ", address(clusters));
         console.log("Lottery          ", address(lottery));
+        console.log("TicketRegistry   ", address(tickets));
+        console.log("IdentityVerifier ", address(verifier));
         console.log("resolver         ", resolver);
         console.log("inventory        ", p.inventory);
         console.log("cohorts          ", p.cohortCount);

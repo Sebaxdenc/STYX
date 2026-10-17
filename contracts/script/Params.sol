@@ -14,9 +14,11 @@ struct ProtocolParams {
     uint8 minResponsesToQualify;
     uint8 participationCap;
     uint256 inventory;
+    uint256 priceWei;
     uint256 roundLengthBlocks;
     uint256 appealBondWei;
     uint256 disputeWindowSeconds;
+    uint256 qualificationWindowSeconds;
 }
 
 /// @notice Loads protocol-params.json, the single source of truth for parameters.
@@ -42,6 +44,8 @@ library Params {
         p.participationCap = uint8(vm.parseJsonUint(json, ".lottery.participationCap"));
 
         p.inventory = vm.parseJsonUint(json, ".sale.inventory");
+        p.priceWei = vm.parseUint(vm.parseJsonString(json, ".sale.priceWei"));
+        p.qualificationWindowSeconds = vm.parseJsonUint(json, ".qualification.windowSeconds");
         p.roundLengthBlocks = vm.parseJsonUint(json, ".lottery.roundLengthBlocks");
         p.appealBondWei = vm.parseUint(vm.parseJsonString(json, ".dispute.challengerBondWei"));
         p.disputeWindowSeconds = vm.parseJsonUint(json, ".dispute.windowSeconds");

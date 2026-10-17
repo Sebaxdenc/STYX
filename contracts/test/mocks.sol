@@ -51,3 +51,43 @@ contract MockClusterRegistry {
         return value == 0 ? 10_000 : value;
     }
 }
+
+contract MockLottery {
+    mapping(address => bool) public hasEntitlement;
+
+    function setEntitlement(address who, bool value) external {
+        hasEntitlement[who] = value;
+    }
+}
+
+contract MockClusters {
+    mapping(address => bool) public isFlagged;
+    bool public hasFinding;
+
+    function setFinding(bool value) external {
+        hasFinding = value;
+    }
+
+    function setFlagged(address who, bool value) external {
+        isFlagged[who] = value;
+    }
+
+    function weightMultiplierBps(address who) external view returns (uint256) {
+        return isFlagged[who] && hasFinding ? 2500 : 10_000;
+    }
+}
+
+/// @dev Accepts an entitlement but is a contract, to exercise the EOA custody
+///      requirement that blocks atomic account sales.
+contract ContractHolder {
+    function claim(address registry, bytes32 nullifier) external payable {
+        (bool ok, bytes memory data) = registry.call{value: msg.value}(
+            abi.encodeWithSignature("claimTicket(bytes32)", nullifier)
+        );
+        if (!ok) {
+            assembly {
+                revert(add(data, 32), mload(data))
+            }
+        }
+    }
+}

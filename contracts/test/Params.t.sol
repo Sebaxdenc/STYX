@@ -119,6 +119,30 @@ contract ParamsTest is Test {
         assertEq(address(lottery.clusters()), address(clusters));
     }
 
+    /// @notice El ciclo completo debe caber en el tiempo del speech.
+    ///
+    /// @dev El pitch dura 3 minutos y la demo ocupa 1 o 2. Si alguien sube una
+    ///      ventana sin pensar en esto, la demo deja de ser posible en el
+    ///      escenario y este test lo dice antes de descubrirlo en vivo.
+    function test_demoFitsInsideThePitch() public view {
+        string memory json = vm.readFile("../protocol-params.json");
+        uint256 blockTimeMs = vm.parseJsonUint(json, ".network.blockTimeMs");
+
+        uint256 roundSeconds = (p.roundLengthBlocks * blockTimeMs) / 1000;
+        uint256 total = p.enrollmentWindowSeconds + p.qualificationWindowSeconds + roundSeconds
+            + p.disputeWindowSeconds;
+
+        assertLe(total, 120, "el ciclo completo debe caber en dos minutos");
+        assertGe(
+            p.enrollmentWindowSeconds, 15, "hace falta tiempo para que el publico escanee el QR"
+        );
+        assertGe(
+            (uint256(p.responseWindowBlocks) * blockTimeMs) / 1000,
+            5,
+            "menos de 5 s no da para confirmar en la wallet"
+        );
+    }
+
     function test_paramsProduceDeployableContracts() public {
         Enrollment enrollment =
             new Enrollment(p.bondWei, p.enrollmentWindowSeconds, p.abandonmentForfeitBps);

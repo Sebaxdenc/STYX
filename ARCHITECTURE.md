@@ -175,6 +175,29 @@ SABADO 19:05     Las entradas pasan a definitivas
 | 5. Definitivo | Al cerrar la impugnación | La entrada, firme |
 | 6. Redimido | En la puerta | Acceso consumido |
 
+**Línea de tiempo de la demo.** El pitch dura tres minutos y la demo ocupa uno o
+dos, así que los mismos pasos corren comprimidos. Los valores están en
+`protocol-params.json` y hay un test, `test_demoFitsInsideThePitch`, que falla si
+alguien sube una ventana y rompe el encaje.
+
+```
+0:00-0:25  Enrolamiento abierto. El equipo entra, y el publico que
+           escanee el QR tambien. 25 s, sin carrera: llegar primero
+           no da ventaja igual que en produccion.
+0:25-1:10  Cualificacion: 5 retos, uno cada ~9 s, 6 s para responder
+           cada uno. Un toque por reto.
+1:10-1:22  Semilla, sorteo y reclamo. El enjambre tambien gana
+           entradas: a estas alturas nada lo ha filtrado todavia.
+1:22-1:42  El detector corre (30 ms), se compromete el hallazgo, y las
+           entradas del enjambre se REVOCAN en pantalla. Las de las
+           personas pasan a definitivas.
+```
+
+Que el enjambre gane primero y sea revocado después **no es un defecto de la
+demo, es la tesis**: en tiempo real hay segundos de datos y no se detecta nada;
+en retrospectiva está el patrón completo. La etapa provisional es lo que
+convierte ese análisis en una consecuencia ejecutable.
+
 El salto crítico es de 3 a 5. En el sorteo el contrato **no acuña nada**:
 registra que esas direcciones tienen derecho a una entrada. El NFT emitido en la
 etapa 4 es provisional mientras la ventana de impugnación esté abierta, con las
@@ -263,6 +286,18 @@ La admisión exige una prueba fresca ligada a la identidad fijada en la emisión
 sobre un reto emitido en la puerta, lo que además impide reutilizar pruebas. Una
 vez la redención está ligada a identidad, **la transferibilidad de la wallet pasa
 a ser irrelevante** en lugar de ser el agujero del diseño.
+
+**Revocación.** Mientras la ventana de impugnación está abierta, la entrada es
+provisional y **cualquiera** puede revocar la de un titular marcado en un
+hallazgo comprometido, por el mismo motivo que marcar es permissionless: la
+aplicación no debe depender de que el operador se moleste. El precio se reembolsa
+íntegro, porque una revocación pone precio a la coordinación en lugar de
+confiscar dinero, y la apelación sigue abierta.
+
+Al revocar se **libera el nullifier**, de modo que una persona honesta mal
+atrapada en un clúster pueda reemitir su entrada tras ganar la apelación. Y una
+entrada marcada **no se puede convertir en definitiva**: hay que levantar el
+hallazgo primero, que es lo que mantiene la exclusión no silenciosa.
 
 Medidas de apoyo:
 
