@@ -265,10 +265,21 @@ presentar un valor plausible.
 
 ## Skill de frontend
 
-`.kiro/steering/ui-ux-pro-max/` contiene la skill UI UX Pro Max (licencia MIT),
-con datasets de diseño para Next.js, React, shadcn, Tailwind y otros stacks. Está
-versionada en el repositorio para que todo el equipo trabaje con la misma guía
-sin pasos de instalación.
+`.kiro/steering/` contiene la skill UI UX Pro Max (licencia MIT), que instala
+siete módulos de guía de diseño:
+
+| Módulo | Contenido |
+|---|---|
+| `ui-ux-pro-max` | Núcleo, con datasets por stack: Next.js, React, shadcn, Tailwind, Svelte, Vue, Flutter y otros |
+| `design-system` | Tokens, escalas y consistencia de sistema de diseño |
+| `ui-styling` | Patrones de estilado y composición de componentes |
+| `design` | Guías generales de diseño visual |
+| `brand` | Identidad de marca, paleta, logo, mensajería |
+| `banner-design` | Formatos y estilos de banner |
+| `slides` | Diseño de presentaciones, útil para el pitch de la hackathon |
+
+Está versionada en el repositorio para que todo el equipo trabaje con la misma
+guía sin pasos de instalación.
 
 Se regenera con:
 
