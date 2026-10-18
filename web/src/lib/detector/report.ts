@@ -109,3 +109,37 @@ const SIGNAL_LABELS: Readonly<Record<string, string>> = {
 export function describeSignal(signal: string): string {
   return SIGNAL_LABELS[signal] ?? signal;
 }
+
+/**
+ * Label for `mean_internal_correlation`, which means different things per route.
+ *
+ * Only the `correlated` route stores a pairwise correlation there. The
+ * `cohesive` and `multi_signal` routes store the group cohesion, and `identical`
+ * stores a constant. Calling all of them "correlation" would misrepresent the
+ * measurement and, worse, invite comparison against the pairwise threshold that
+ * governs a different route.
+ */
+export function metricLabel(path: DetectionPath): string {
+  switch (path) {
+    case "correlated":
+      return "Correlación por pares";
+    case "identical":
+      return "Correlación";
+    case "cohesive":
+    case "multi_signal":
+      return "Cohesión del grupo";
+  }
+}
+
+export function metricHint(path: DetectionPath): string {
+  switch (path) {
+    case "correlated":
+      return "Media de las aristas internas del subgrafo";
+    case "identical":
+      return "Varianza nula: constante por construcción";
+    case "cohesive":
+      return "Cada miembro contra el perfil medio, excluyéndose a sí mismo";
+    case "multi_signal":
+      return "Informativa: esta ruta no depende de la temporización";
+  }
+}

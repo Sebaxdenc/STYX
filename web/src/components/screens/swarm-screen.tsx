@@ -9,6 +9,8 @@ import {
   describeSignal,
   flaggedCount,
   isDetectorReport,
+  metricHint,
+  metricLabel,
   unclusteredCount,
   type DetectorReport,
 } from "@/lib/detector/report";
@@ -168,13 +170,29 @@ export function SwarmScreen() {
 
               <dl className="mt-6 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
                 <Field label="Miembros" value={formatCount(cluster.members.length)} mono />
+                {/*
+                  The label depends on the route. `mean_internal_correlation`
+                  holds pairwise correlation only for the `correlated` route; for
+                  the others it carries the group cohesion, and labelling that
+                  "correlation" next to a different route's threshold reads as a
+                  contradiction.
+                */}
                 <Field
-                  label="Correlación interna"
+                  label={metricLabel(cluster.path)}
                   value={cluster.mean_internal_correlation.toFixed(2)}
-                  hint="Mide moverse juntos, no ser rápido"
+                  hint={metricHint(cluster.path)}
                   mono
                 />
-                <Field label="Densidad" value={cluster.density.toFixed(2)} mono />
+                <Field
+                  label="Densidad"
+                  value={cluster.density.toFixed(2)}
+                  hint={
+                    cluster.path === "correlated"
+                      ? "Densidad medida del subgrafo"
+                      : "Fijada por construcción en esta ruta"
+                  }
+                  mono
+                />
                 <Field
                   label="Sospecha"
                   value={cluster.suspicion.toFixed(2)}
@@ -203,21 +221,33 @@ export function SwarmScreen() {
             </Panel>
           ))}
 
+          {/*
+            Scoped to reading the report. The project's limitations belong in
+            README.md and ARCHITECTURE.md, not in an operational view of a
+            finding. What stays here is what design invariant 3 requires to be
+            visible wherever a finding is shown: that it modulates weight and
+            opens a dispute, and never excludes silently.
+          */}
           <Panel>
-            <Eyebrow>El límite honesto</Eyebrow>
-            <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-              Un adversario que aleatorice la temporización y las huellas, con financiador,
-              gas y calldata distintos por wallet, <strong className="text-foreground">no
-              es detectable</strong> con datos onchain. El detector incluye un test que lo
-              verifica, para que el límite sea comprobable en lugar de una nota al pie. Esa
-              evasión no es gratis: exige infraestructura independiente por identidad y
-              fondear cada wallet por una ruta distinta.
-            </p>
+            <Eyebrow>Cómo leer este informe</Eyebrow>
             <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
               Un hallazgo reduce el peso en el sorteo y abre una impugnación. Nunca excluye
-              en silencio, la vía de apelación es obligatoria, y el umbral de correlación
-              vigente es {params.detection.correlationThreshold} con un tamaño mínimo de
-              clúster de {params.detection.minClusterSize}.
+              en silencio y la vía de apelación es obligatoria. El tamaño mínimo de clúster
+              vigente es {params.detection.minClusterSize}.
+            </p>
+            {/*
+              Each route has its own threshold, and naming only the pairwise one
+              invites a false reading: a cohesive cluster at 0.66 looks like it
+              beat a 0.8 bar when that bar governs a route which never fired.
+            */}
+            <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+              Cada ruta tiene su propio umbral. El de{" "}
+              {params.detection.correlationThreshold} aplica a la correlación por pares de
+              la ruta <span className="font-mono text-xs">correlated</span>, que construye
+              el grafo. La ruta <span className="font-mono text-xs">cohesive</span> no usa
+              ese valor: compara la cohesión del grupo contra un suelo que además escala con
+              el tamaño, porque un grupo independiente de n miembros ya da una cohesión
+              aproximada de 1 partido por la raíz de n por puro azar.
             </p>
           </Panel>
         </>
